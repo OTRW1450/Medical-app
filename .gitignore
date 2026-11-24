@@ -5,3 +5,4 @@ dist
 # Never commit real patient data exports
 *.pchron.json
 *.pchron.enc
+*.tsbuildinfo
