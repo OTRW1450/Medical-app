@@ -6,8 +6,9 @@ import { useAppState, usePatient } from '../state';
 import { Field } from '../components/ui';
 import { PatientForm } from './PatientForm';
 import { today } from '../lib/dates';
-import { changePasscode, MIN_PASSCODE } from '../db/keys';
-import { AUTOLOCK_KEY, AUTOLOCK_OPTIONS, autoLockMinutes, strength } from './LockScreen';
+import { changePasscode, createRecoveryKey, hasRecoveryKey, MIN_PASSCODE, unlock, verifyRecoveryKey } from '../db/keys';
+import { Modal } from '../components/ui';
+import { AUTOLOCK_KEY, AUTOLOCK_OPTIONS, autoLockMinutes, RecoveryKeyCard, strength } from './LockScreen';
 import { isIOS, promptInstall, usePwa } from '../pwa';
 
 export function DataView() {
@@ -69,6 +70,7 @@ export function DataView() {
       {msg && <div className="banner">{msg}</div>}
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
         <Security />
+        <RecoveryCard />
         <InstallCard />
         <div className="card">
           <h3>Patient profile</h3>
@@ -203,6 +205,70 @@ function InstallCard() {
       <p className="faint" style={{ fontSize: 13, marginTop: 6 }}>
         {pwa.offlineReady ? '✓ Offline ready – the app works with no internet connection.' : 'Offline mode activates after the app has been opened once from its hosted address.'}
       </p>
+    </div>
+  );
+}
+
+function RecoveryCard() {
+  const [exists, setExists] = useState<boolean | null>(null);
+  const [checkCode, setCheckCode] = useState('');
+  const [checkMsg, setCheckMsg] = useState('');
+  const [pass, setPass] = useState('');
+  const [newCode, setNewCode] = useState<string | null>(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    hasRecoveryKey().then(setExists);
+  }, [newCode]);
+  const check = async () => {
+    setCheckMsg('Checking…');
+    setCheckMsg((await verifyRecoveryKey(checkCode)) ? '✓ This recovery key works.' : '✗ That key does not match this device.');
+  };
+  const create = async () => {
+    setErr('');
+    setBusy(true);
+    try {
+      await unlock(pass); // re-confirm identity before issuing a new key
+      setNewCode(await createRecoveryKey());
+      setPass('');
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card" style={exists === false ? { borderColor: 'var(--serious)' } : undefined}>
+      <h3>🗝️ Recovery key (forgot passcode)</h3>
+      {exists === false ? (
+        <div className="banner warn">▲ No recovery key yet. If the passcode is forgotten, the records cannot be opened. Create one now and keep it somewhere safe.</div>
+      ) : (
+        <p className="muted">A recovery key is set. On the lock screen, <i>Forgot passcode?</i> lets you use it to choose a new passcode. It was shown only once and is not stored.</p>
+      )}
+      {exists && (
+        <details>
+          <summary>Check that my saved recovery key works</summary>
+          <div className="row" style={{ marginTop: 8 }}>
+            <input value={checkCode} onChange={(e) => { setCheckCode(e.target.value); setCheckMsg(''); }} placeholder="XXXX-XXXX-…" spellCheck={false} style={{ flex: 1, fontFamily: 'ui-monospace, monospace', textTransform: 'uppercase' }} />
+            <button onClick={check} disabled={!checkCode}>Check</button>
+          </div>
+          {checkMsg && <p style={{ fontSize: 13, margin: '6px 0 0' }}>{checkMsg}</p>}
+        </details>
+      )}
+      <details open={exists === false} style={{ marginTop: 8 }}>
+        <summary>{exists ? 'Lost it? Create a new recovery key' : 'Create a recovery key'}</summary>
+        <p className="faint" style={{ fontSize: 13 }}>{exists ? 'The old recovery key will stop working immediately.' : ''} Enter your current passcode to continue.</p>
+        <div className="row">
+          <input type="password" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Current passcode" style={{ flex: 1 }} />
+          <button className="primary" onClick={create} disabled={!pass || busy}>{busy ? 'Checking…' : exists ? 'Create new key' : 'Create key'}</button>
+        </div>
+        {err && <p style={{ fontSize: 13, color: 'var(--critical)', margin: '6px 0 0' }}>{err}</p>}
+      </details>
+      {newCode && (
+        <Modal title="New recovery key" onClose={() => confirm('Close without saving? This key will not be shown again (you can always create another).') && setNewCode(null)}>
+          <RecoveryKeyCard code={newCode} intro="Your new recovery key. Any older recovery key no longer works. This is shown only once." onDone={() => setNewCode(null)} doneLabel="I’ve saved it – close" />
+        </Modal>
+      )}
     </div>
   );
 }

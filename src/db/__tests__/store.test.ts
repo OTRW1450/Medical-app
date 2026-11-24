@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../db';
-import { changePasscode, lock, setupPasscode, unlock } from '../keys';
+import { changePasscode, createRecoveryKey, generateRecoveryCode, lock, lockoutRemainingMs, normalizeRecoveryCode, recoverWithKey, setupPasscode, unlock, verifyRecoveryKey } from '../keys';
 import { attachments, encryptLegacyRows, loadPatientData, store } from '../store';
 import { exportPatient, importBackup, importData } from '../backup';
 import { buildDemo } from '../demo';
@@ -74,5 +74,47 @@ describe('encrypted store', () => {
     const b = await loadPatientData(pid2);
     expect(b!.events.length).toBe(a!.events.length);
     expect(b!.labs.length).toBe(a!.labs.length);
+  });
+});
+
+describe('forgot passcode (recovery key)', () => {
+  it('issues a well-formed recovery key at setup that unlocks and resets the passcode', async () => {
+    const code = await setupPasscode(PASS);
+    expect(code).toMatch(/^([0-9A-HJKMNP-TV-Z]{4}-){7}[0-9A-HJKMNP-TV-Z]{4}$/);
+    await store.put('patients', { id: 'p1', name: 'Jo', createdAt: 0 });
+    expect(await rawDump()).not.toContain(code.replace(/-/g, ''));
+    lock();
+    // sloppy typing is accepted: lower case, spaces, O for 0
+    const sloppy = code.toLowerCase().replace(/-/g, ' ').replace(/0/g, 'o');
+    const fresh = await recoverWithKey(sloppy, 'brand new passphrase');
+    expect(fresh).not.toBe(code);
+    expect((await store.get('patients', 'p1'))!.name).toBe('Jo');
+    lock();
+    await expect(unlock(PASS)).rejects.toThrow(); // old passcode retired
+    await expect(recoverWithKey(code, 'another one here')).rejects.toThrow('not correct'); // used key retired
+    await unlock('brand new passphrase');
+    lock();
+    await recoverWithKey(fresh, 'third passphrase ok'); // new key works
+  });
+
+  it('rejects wrong recovery keys and throttles repeated failures', async () => {
+    await setupPasscode(PASS);
+    lock();
+    const bogus = generateRecoveryCode();
+    for (let i = 0; i < 5; i++) await expect(recoverWithKey(bogus, 'whatever pass')).rejects.toThrow();
+    expect(await lockoutRemainingMs()).toBeGreaterThan(0);
+    await expect(unlock(PASS)).rejects.toThrow('Too many attempts');
+  });
+
+  it('can verify and replace the recovery key while unlocked', async () => {
+    const code = await setupPasscode(PASS);
+    expect(await verifyRecoveryKey(code)).toBe(true);
+    expect(await verifyRecoveryKey(generateRecoveryCode())).toBe(false);
+    const replacement = await createRecoveryKey();
+    expect(await verifyRecoveryKey(code)).toBe(false);
+    expect(await verifyRecoveryKey(replacement)).toBe(true);
+    await changePasscode(PASS, 'changed passphrase');
+    expect(await verifyRecoveryKey(replacement)).toBe(true); // passcode change keeps recovery key
+    expect(normalizeRecoveryCode('abcd-efgh ijkl-mnop')).toBe('ABCDEFGH1JK1MN0P');
   });
 });

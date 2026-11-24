@@ -282,3 +282,20 @@ table.timetable tr.key-row td:first-child { box-shadow: inset 3px 0 0 var(--acce
   .report li, .report p { break-inside: avoid; }
   .banner { display: none; }
 }
+
+/* ---------- Recovery key ---------- */
+.recovery-code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 1.35rem; font-weight: 600;
+  letter-spacing: 1px; word-spacing: 4px; padding: 14px 16px; border-radius: 10px; text-align: center;
+  background: var(--surface-2); border: 2px dashed var(--axis); user-select: all; white-space: nowrap; overflow-x: auto;
+}
+@media print {
+  .recovery-card .recovery-code { border-color: #000; font-size: 16pt; }
+}
+@media print {
+  /* When a dialog is open (e.g. recovery key), print only the dialog. */
+  body:has(.modal-back) .app { display: none !important; }
+  .modal-back { position: static; background: none; padding: 0; }
+  .modal { box-shadow: none; border: 0; width: 100%; }
+  .modal .row:first-child button { display: none; }
+}

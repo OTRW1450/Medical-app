@@ -39,7 +39,8 @@ A private, local-first app that keeps a long, complicated medical history in one
 - **Auto-lock.** The app locks after a period of inactivity (1/5/15/60 minutes, or never) and when it's left in the background too long. There's also a **Lock** button. Locking discards the key from memory.
 - **No network.** There's no server and no account. The production build ships a Content-Security-Policy with `connect-src 'none'`, and the service worker only serves the app's own cached files.
 - **Offline & installable.** Once it has been opened from its hosted address it can be installed (Install button, *Add to Home Screen* on iPhone) and then runs with no internet at all.
-- **Forgotten passcode = lost data**, unless you have an encrypted backup. Export backups regularly (*Data & privacy*).
+- **Forgot passcode → recovery key.** At setup the app shows a one-time **recovery key**: 32 characters, 160 random bits, which can be printed, downloaded or copied. You confirm you've saved it by typing its last group. The data key is also wrapped with this recovery key, so *Lock screen → Forgot passcode?* lets you enter it and choose a new passcode without touching the records. Each use retires the key and issues a new one. Under *Data & privacy* you can check that a saved key still works, or create a replacement (requires the current passcode). There is no server, email reset or security question, so there's no back door. If both the passcode and the recovery key are lost, the data can't be opened by anyone. Keep encrypted backups too.
+- **Guess throttling.** After 5 wrong passcode or recovery-key attempts the app makes you wait, starting at 30 s and doubling up to 15 min. The counter is stored with the data.
 - Remaining risks: someone who knows the passcode, malware on the device, browser extensions that can read pages, and unencrypted exports. Use the encrypted backup option.
 
 ## Running it

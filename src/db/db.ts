@@ -16,12 +16,20 @@ export interface EncRow {
 }
 
 export interface KeyMeta {
-  id: 'key';
+  /** 'key' = data key wrapped by the passcode; 'recovery' = data key wrapped by the recovery key */
+  id: 'key' | 'recovery';
   salt: Uint8Array;
   iv: Uint8Array;
   wrapped: ArrayBuffer;
   iterations: number;
   createdAt: number;
+}
+
+/** Failed-attempt counter, kept in the same database so it can't be reset by clearing site settings alone. */
+export interface ThrottleMeta {
+  id: 'throttle';
+  fails: number;
+  until: number;
 }
 
 export const RECORD_TABLES = ['patients', 'events', 'meds', 'labs', 'logs', 'insightStates', 'questions'] as const;
@@ -36,7 +44,7 @@ class ChronicleDB extends Dexie {
   attachments!: Table<EncRow, string>;
   insightStates!: Table<EncRow, string>;
   questions!: Table<EncRow, string>;
-  meta!: Table<KeyMeta, string>;
+  meta!: Table<KeyMeta | ThrottleMeta, string>;
 
   constructor() {
     super('pain-chronicle');
