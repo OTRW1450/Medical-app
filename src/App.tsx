@@ -9,7 +9,9 @@ import { LogView } from './views/LogView';
 import { MedsView } from './views/MedsView';
 import { LabsView } from './views/LabsView';
 import { InsightsView } from './views/InsightsView';
-import { SummaryView } from './views/SummaryView';
+import { ReportsView } from './views/ReportsView';
+import { lock } from './db/keys';
+import { applyUpdate, promptInstall, usePwa } from './pwa';
 import { DataView } from './views/DataView';
 import { Welcome } from './views/Welcome';
 import { PatientForm } from './views/PatientForm';
@@ -22,7 +24,7 @@ const NAV = [
   { path: 'log', label: 'Pain diary', icon: Icon.log },
   { path: 'meds', label: 'Medications', icon: Icon.meds },
   { path: 'labs', label: 'Lab results', icon: Icon.labs },
-  { path: 'summary', label: 'Doctor summary', icon: Icon.summary },
+  { path: 'reports', label: 'Reports & printouts', icon: Icon.summary },
   { path: 'data', label: 'Data & privacy', icon: Icon.data },
 ] as const;
 
@@ -30,6 +32,7 @@ export function App() {
   const { patients, patientId, setPatientId, data, insights, insightStates } = useAppState();
   const route = useRoute();
   const [newPatient, setNewPatient] = useState(false);
+  const pwa = usePwa();
 
   if (patients === undefined) return null; // loading
   if (!patients.length) return <Welcome />;
@@ -52,7 +55,8 @@ export function App() {
       case 'meds': view = <MedsView params={route.params} />; break;
       case 'labs': view = <LabsView params={route.params} />; break;
       case 'insights': view = <InsightsView />; break;
-      case 'summary': view = <SummaryView />; break;
+      case 'reports': view = <ReportsView params={route.params} />; break;
+      case 'summary': view = <ReportsView params={new URLSearchParams('tab=doctor')} />; break;
       case 'data': view = <DataView />; break;
       default: view = <Dashboard />;
     }
@@ -87,12 +91,24 @@ export function App() {
             </a>
           ))}
         </nav>
-        <div style={{ flex: 1 }} />
+        <div className="row" style={{ padding: '10px 4px 0', gap: 6 }}>
+          <button className="small" onClick={lock} title="Lock now – requires the passcode to reopen">🔒 Lock</button>
+          {pwa.canInstall && <button className="small" onClick={promptInstall}>⬇ Install app</button>}
+        </div>
+        <div className="spacer-flex" />
         <p className="faint" style={{ fontSize: 11.5, padding: '8px 6px 0' }}>
-          🔒 Stored only in this browser on this device. Nothing is uploaded. Pattern hints are prompts for discussion with clinicians, not diagnoses.
+          🔒 Encrypted on this device. Works offline. Nothing is uploaded. Pattern hints are prompts for discussion with clinicians, not diagnoses.
         </p>
       </aside>
-      <main className="main">{view}</main>
+      <main className="main">
+        {pwa.updateReady && (
+          <div className="banner no-print row between">
+            <span>A new version of the app is ready. Your records are not affected.</span>
+            <button className="small primary" onClick={applyUpdate}>Update now</button>
+          </div>
+        )}
+        {view}
+      </main>
       {newPatient && <PatientForm onClose={() => setNewPatient(false)} />}
     </div>
   );

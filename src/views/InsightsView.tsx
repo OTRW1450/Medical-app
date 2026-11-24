@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { db } from '../db/db';
+import { store } from '../db/store';
 import { usePatient } from '../state';
 import { uid } from '../lib/id';
 import { fmtDate } from '../lib/dates';
@@ -19,9 +19,9 @@ export function InsightCard({ i, compact }: { i: Insight; compact?: boolean }) {
   const { patient, insightStates, questions } = usePatient();
   const st = insightStates.get(i.key);
   const setState = async (state: 'pinned' | 'dismissed' | null) => {
-    const id = `${patient.id}:${i.key}`;
-    if (!state) await db.insightStates.delete(id);
-    else await db.insightStates.put({ id, patientId: patient.id, key: i.key, state });
+    if (!state) {
+      if (st) await store.remove('insightStates', st.id);
+    } else await store.put('insightStates', { id: st?.id ?? uid(), patientId: patient.id, key: i.key, state });
   };
   const asked = questions.some((q) => q.source === i.key);
   const addQuestion = async () => {
@@ -29,7 +29,7 @@ export function InsightCard({ i, compact }: { i: Insight; compact?: boolean }) {
       i.category === 'cluster'
         ? `Could ${i.title.split(' features of ')[1] ?? 'this pattern'} explain several of my problems? (${i.evidence.length} clues in my record)`
         : `${i.title} – what does this mean and does it need follow-up?`;
-    await db.questions.add({ id: uid(), patientId: patient.id, text, forSpecialty: i.specialty, source: i.key, done: false, createdAt: Date.now() });
+    await store.put('questions', { id: uid(), patientId: patient.id, text, forSpecialty: i.specialty, source: i.key, done: false, createdAt: Date.now() });
   };
   return (
     <div className={`card insight ${i.level}`} style={st?.state === 'dismissed' ? { opacity: 0.55 } : undefined}>

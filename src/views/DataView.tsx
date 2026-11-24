@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { deletePatient } from '../db/db';
+import { deletePatient } from '../db/store';
 import { download, exportPatient, importBackup, importData, isEncryptedBackup } from '../db/backup';
 import { buildDemo } from '../db/demo';
 import { useAppState, usePatient } from '../state';
 import { Field } from '../components/ui';
 import { PatientForm } from './PatientForm';
 import { today } from '../lib/dates';
+import { changePasscode, MIN_PASSCODE } from '../db/keys';
+import { AUTOLOCK_KEY, AUTOLOCK_OPTIONS, autoLockMinutes, strength } from './LockScreen';
+import { isIOS, promptInstall, usePwa } from '../pwa';
 
 export function DataView() {
   const { patient } = usePatient();
@@ -65,6 +68,8 @@ export function DataView() {
       </div>
       {msg && <div className="banner">{msg}</div>}
       <div className="grid cols-2" style={{ alignItems: 'start' }}>
+        <Security />
+        <InstallCard />
         <div className="card">
           <h3>Patient profile</h3>
           <p className="muted">Name, date of birth, allergies, family history and the story so far.</p>
@@ -73,10 +78,10 @@ export function DataView() {
         <div className="card">
           <h3>How your data is stored</h3>
           <ul style={{ paddingLeft: 18, margin: 0 }}>
-            <li>Saved in this browser’s private storage (IndexedDB) on this device only.</li>
-            <li>The app makes no network requests; the built version enforces this with a Content-Security-Policy.</li>
-            <li>Clearing browser data or using private/incognito mode can erase it – <b>export backups regularly</b>.</li>
-            <li>Anyone with access to this browser profile can open the records. Use a device password.</li>
+            <li>Every record and attached file is <b>encrypted (AES-256-GCM)</b> with a key unlocked only by your passcode, and saved on this device only.</li>
+            <li>The app makes no network requests; the built version enforces this with a Content-Security-Policy. Once installed it runs fully offline.</li>
+            <li>The passcode is never stored. If it is forgotten the records cannot be recovered – <b>export encrypted backups regularly</b>.</li>
+            <li>Clearing browser/site data or uninstalling the app erases the records.</li>
           </ul>
           <p className="faint" style={{ fontSize: 13, marginTop: 6 }}>{usage}{persisted !== undefined && ` · ${persisted ? 'protected from automatic cleanup' : 'browser may clear storage under pressure'}`}</p>
         </div>
@@ -128,5 +133,76 @@ export function DataView() {
       </div>
       {editing && <PatientForm patient={patient} onClose={() => setEditing(false)} />}
     </>
+  );
+}
+
+function Security() {
+  const [mins, setMins] = useState(autoLockMinutes());
+  const [oldP, setOldP] = useState('');
+  const [p1, setP1] = useState('');
+  const [p2, setP2] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const s = strength(p1);
+  const change = async () => {
+    setMsg('');
+    if (!s.ok || p1 !== p2) return setMsg(`New passcode must match and be at least ${MIN_PASSCODE} characters.`);
+    setBusy(true);
+    try {
+      await changePasscode(oldP, p1);
+      setMsg('✓ Passcode changed.');
+      setOldP(''); setP1(''); setP2('');
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card">
+      <h3>🔒 Passcode & auto-lock</h3>
+      <label className="field">
+        <span>Lock automatically after inactivity</span>
+        <select value={mins} onChange={(e) => { const v = Number(e.target.value); setMins(v); localStorage.setItem(AUTOLOCK_KEY, String(v)); }}>
+          {AUTOLOCK_OPTIONS.map((m) => <option key={m} value={m}>{m === 0 ? 'Never (not recommended)' : m === 1 ? '1 minute' : `${m} minutes`}</option>)}
+        </select>
+        <span className="hint">Takes effect next time the app is unlocked.</span>
+      </label>
+      <details style={{ marginTop: 10 }}>
+        <summary>Change passcode</summary>
+        <div className="stack" style={{ marginTop: 8 }}>
+          <input type="password" placeholder="Current passcode" autoComplete="current-password" value={oldP} onChange={(e) => setOldP(e.target.value)} />
+          <input type="password" placeholder="New passcode" autoComplete="new-password" value={p1} onChange={(e) => setP1(e.target.value)} />
+          {p1 && <span className="faint" style={{ fontSize: 13 }}>Strength: {s.label}</span>}
+          <input type="password" placeholder="Repeat new passcode" autoComplete="new-password" value={p2} onChange={(e) => setP2(e.target.value)} />
+          <button onClick={change} disabled={busy || !oldP || !p1}>{busy ? 'Changing…' : 'Change passcode'}</button>
+          {msg && <span style={{ fontSize: 13 }}>{msg}</span>}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function InstallCard() {
+  const pwa = usePwa();
+  return (
+    <div className="card">
+      <h3>📱 Install & offline</h3>
+      {pwa.installed ? (
+        <p>✓ Installed as an app on this device.</p>
+      ) : pwa.canInstall ? (
+        <>
+          <p className="muted">Install Pain Chronicle as an app – it gets its own icon and opens without the browser.</p>
+          <button className="primary" onClick={promptInstall}>Install app</button>
+        </>
+      ) : isIOS() ? (
+        <p className="muted">On iPhone/iPad: open this page in <b>Safari</b>, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</p>
+      ) : (
+        <p className="muted">Use your browser’s menu → <b>Install app</b> / <b>Add to Home screen</b>. (On desktop Chrome/Edge there is also an install icon in the address bar.)</p>
+      )}
+      <p className="faint" style={{ fontSize: 13, marginTop: 6 }}>
+        {pwa.offlineReady ? '✓ Offline ready – the app works with no internet connection.' : 'Offline mode activates after the app has been opened once from its hosted address.'}
+      </p>
+    </div>
   );
 }

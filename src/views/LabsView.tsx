@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { db } from '../db/db';
+import { store } from '../db/store';
 import { usePatient } from '../state';
 import { uid } from '../lib/id';
 import { fmtDate, toTime, today } from '../lib/dates';
@@ -142,7 +142,7 @@ function LabForm({ lab, onClose }: { lab: LabResult; onClose: () => void }) {
   const num = (s: string) => (s.trim() === '' || !Number.isFinite(Number(s)) ? undefined : Number(s));
   const save = async () => {
     const n = num(raw);
-    await db.labs.put({ ...l, test: l.test.trim(), value: n, textValue: n === undefined ? raw.trim() || undefined : undefined });
+    await store.put('labs', { ...l, test: l.test.trim(), value: n, textValue: n === undefined ? raw.trim() || undefined : undefined });
     onClose();
   };
   return (
@@ -151,7 +151,7 @@ function LabForm({ lab, onClose }: { lab: LabResult; onClose: () => void }) {
       onClose={onClose}
       footer={
         <>
-          {!isNew && <button className="danger" style={{ marginRight: 'auto' }} onClick={async () => { await db.labs.delete(l.id); onClose(); }}>Delete</button>}
+          {!isNew && <button className="danger" style={{ marginRight: 'auto' }} onClick={async () => { await store.remove('labs', l.id); onClose(); }}>Delete</button>}
           <button onClick={onClose}>Cancel</button>
           <button className="primary" onClick={save} disabled={!l.test.trim() || !raw.trim()}>Save</button>
         </>
@@ -194,7 +194,7 @@ function ImportLabs({ onClose }: { onClose: () => void }) {
   };
   const save = async () => {
     if (!rows) return;
-    await db.labs.bulkAdd(rows);
+    await store.bulkPut('labs', rows);
     onClose();
   };
   return (

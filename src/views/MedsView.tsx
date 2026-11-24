@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { db } from '../db/db';
+import { store } from '../db/store';
 import { usePatient } from '../state';
 import { uid } from '../lib/id';
 import { fmtDate, fmtSpan, daysBetween, toTime, today } from '../lib/dates';
@@ -123,7 +123,7 @@ function MedForm({ med, onClose }: { med: Medication; onClose: () => void }) {
   const set = <K extends keyof Medication>(k: K, v: Medication[K]) => setM({ ...m, [k]: v });
   const save = async () => {
     if (!m.name.trim()) return;
-    await db.meds.put({ ...m, name: m.name.trim() });
+    await store.put('meds', { ...m, name: m.name.trim() });
     onClose();
   };
   return (
@@ -132,7 +132,7 @@ function MedForm({ med, onClose }: { med: Medication; onClose: () => void }) {
       onClose={onClose}
       footer={
         <>
-          {!isNew && <button className="danger" style={{ marginRight: 'auto' }} onClick={async () => { if (confirm('Delete?')) { await db.meds.delete(m.id); onClose(); } }}>Delete</button>}
+          {!isNew && <button className="danger" style={{ marginRight: 'auto' }} onClick={async () => { if (confirm('Delete?')) { await store.remove('meds', m.id); onClose(); } }}>Delete</button>}
           <button onClick={onClose}>Cancel</button>
           <button className="primary" onClick={save} disabled={!m.name.trim()}>Save</button>
         </>

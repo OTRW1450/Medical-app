@@ -1,6 +1,6 @@
 // Export / import of a patient's whole record, optionally encrypted with a
 // passphrase (AES-GCM, key derived with PBKDF2-SHA256, 600k iterations).
-import { db } from './db';
+import { attachments as attStore, loadPatientData, store } from './store';
 import type { Attachment, PatientData } from '../types';
 import { uid } from '../lib/id';
 
@@ -51,18 +51,13 @@ async function deriveKey(pass: string, salt: Uint8Array<ArrayBuffer>) {
 }
 
 export async function exportPatient(patientId: string, passphrase?: string): Promise<Blob> {
-  const [patient, events, meds, labs, logs, questions, atts] = await Promise.all([
-    db.patients.get(patientId),
-    db.events.where('patientId').equals(patientId).toArray(),
-    db.meds.where('patientId').equals(patientId).toArray(),
-    db.labs.where('patientId').equals(patientId).toArray(),
-    db.logs.where('patientId').equals(patientId).toArray(),
-    db.questions.where('patientId').equals(patientId).toArray(),
-    db.attachments.where('patientId').equals(patientId).toArray(),
-  ]);
-  if (!patient) throw new Error('Patient not found');
+  const data = await loadPatientData(patientId);
+  if (!data) throw new Error('Patient not found');
+  const { patient, events, meds, labs, logs, questions } = data;
+  const atts = await Promise.all((await attStore.metaByPatient(patientId)).map((m) => attStore.get(m.id)));
   const attachments: SerializedAttachment[] = [];
   for (const a of atts) {
+    if (!a) continue;
     const { blob, ...rest } = a;
     attachments.push({ ...rest, data: b64(await blob.arrayBuffer()) });
   }
@@ -120,23 +115,15 @@ export async function importData(f: PatientData, attachments: SerializedAttachme
   const pid = uid();
   const evMap = new Map<string, string>();
   for (const e of f.events) evMap.set(e.id, uid());
-  await db.transaction('rw', [db.patients, db.events, db.meds, db.labs, db.logs, db.questions, db.attachments], async () => {
-    await db.patients.add({ ...f.patient, id: pid });
-    await db.events.bulkAdd(f.events.map((e) => ({ ...e, id: evMap.get(e.id)!, patientId: pid })));
-    await db.meds.bulkAdd(f.meds.map((m) => ({ ...m, id: uid(), patientId: pid })));
-    await db.labs.bulkAdd(f.labs.map((l) => ({ ...l, id: uid(), patientId: pid, eventId: l.eventId ? evMap.get(l.eventId) : undefined })));
-    await db.logs.bulkAdd(f.logs.map((l) => ({ ...l, id: uid(), patientId: pid })));
-    await db.questions.bulkAdd((f.questions ?? []).map((q) => ({ ...q, id: uid(), patientId: pid })));
-    await db.attachments.bulkAdd(
-      attachments.map(({ data, ...a }) => ({
-        ...a,
-        id: uid(),
-        patientId: pid,
-        eventId: a.eventId ? evMap.get(a.eventId) : undefined,
-        blob: new Blob([unb64(data)], { type: a.mime }),
-      })),
-    );
-  });
+  // Encrypt everything first, then write (crypto can't run inside an IndexedDB transaction).
+  await store.put('patients', { ...f.patient, id: pid });
+  await store.bulkPut('events', f.events.map((e) => ({ ...e, id: evMap.get(e.id)!, patientId: pid })));
+  await store.bulkPut('meds', f.meds.map((m) => ({ ...m, id: uid(), patientId: pid })));
+  await store.bulkPut('labs', f.labs.map((l) => ({ ...l, id: uid(), patientId: pid, eventId: l.eventId ? evMap.get(l.eventId) : undefined })));
+  await store.bulkPut('logs', f.logs.map((l) => ({ ...l, id: uid(), patientId: pid })));
+  await store.bulkPut('questions', (f.questions ?? []).map((q) => ({ ...q, id: uid(), patientId: pid })));
+  for (const { data, ...a } of attachments)
+    await attStore.put({ ...a, id: uid(), patientId: pid, eventId: a.eventId ? evMap.get(a.eventId) : undefined, blob: new Blob([unb64(data)], { type: a.mime }) });
   return pid;
 }
 

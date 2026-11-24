@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, loadPatientData } from './db/db';
+import { loadPatientData, store } from './db/store';
 import { analyze, type Insight } from './analysis';
 import type { InsightState, Patient, PatientData } from './types';
 
@@ -8,7 +8,7 @@ interface Ctx {
   patients: Patient[] | undefined;
   patientId: string | undefined;
   setPatientId: (id: string | undefined) => void;
-  data: PatientData | undefined;
+  data: (PatientData & { insightStates: InsightState[] }) | undefined;
   insights: Insight[];
   insightStates: Map<string, InsightState>;
 }
@@ -16,8 +16,9 @@ interface Ctx {
 const C = createContext<Ctx | null>(null);
 const KEY = 'pain-chronicle:patient';
 
+/** Mounted only while unlocked. */
 export function StateProvider({ children }: { children: ReactNode }) {
-  const patients = useLiveQuery(() => db.patients.orderBy('name').toArray(), []);
+  const patients = useLiveQuery(() => store.allPatients(), []);
   const [patientId, setPid] = useState<string | undefined>(() => localStorage.getItem(KEY) ?? undefined);
   const setPatientId = (id: string | undefined) => {
     setPid(id);
@@ -32,16 +33,10 @@ export function StateProvider({ children }: { children: ReactNode }) {
   }, [patients, patientId]);
 
   const data = useLiveQuery(() => (patientId ? loadPatientData(patientId) : undefined), [patientId]);
-  const states = useLiveQuery(
-    () => (patientId ? db.insightStates.where('patientId').equals(patientId).toArray() : []),
-    [patientId],
-  );
   const insights = useMemo(() => (data ? analyze(data) : []), [data]);
-  const insightStates = useMemo(() => new Map((states ?? []).map((s) => [s.key, s])), [states]);
+  const insightStates = useMemo(() => new Map((data?.insightStates ?? []).map((s) => [s.key, s])), [data]);
 
-  return (
-    <C.Provider value={{ patients, patientId, setPatientId, data, insights, insightStates }}>{children}</C.Provider>
-  );
+  return <C.Provider value={{ patients, patientId, setPatientId, data, insights, insightStates }}>{children}</C.Provider>;
 }
 
 export function useAppState() {

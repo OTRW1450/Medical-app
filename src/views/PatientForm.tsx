@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { db } from '../db/db';
+import { store } from '../db/store';
 import { uid } from '../lib/id';
 import { useAppState } from '../state';
 import type { Patient } from '../types';
@@ -13,7 +13,7 @@ export function PatientForm({ patient, onClose }: { patient?: Patient; onClose: 
   const set = <K extends keyof Patient>(k: K, v: Patient[K]) => setP({ ...p, [k]: v });
   const save = async () => {
     if (!p.name.trim()) return;
-    await db.patients.put(p);
+    await store.put('patients', p);
     setPatientId(p.id);
     onClose();
   };

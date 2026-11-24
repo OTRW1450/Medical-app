@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { db } from '../db/db';
+import { store } from '../db/store';
 import { usePatient } from '../state';
 import { uid } from '../lib/id';
 import { addDays, daysBetween, fmtDate, toTime, today } from '../lib/dates';
@@ -150,7 +150,7 @@ function LogForm({ initial, isNew, date, setDate, showCycle, allLogs }: { initia
   const prev = allLogs.filter((x) => x.date < date).pop();
 
   const save = async () => {
-    await db.logs.put({ ...l, date });
+    await store.put('logs', { ...l, date });
     setSaved(true);
   };
 
@@ -228,7 +228,7 @@ function LogForm({ initial, isNew, date, setDate, showCycle, allLogs }: { initia
       </div>
       <div className="row" style={{ marginTop: 12 }}>
         <button className="primary" onClick={save}>Save day</button>
-        {!isNew && <button className="danger" onClick={() => confirm('Delete this day?') && db.logs.delete(l.id)}>Delete</button>}
+        {!isNew && <button className="danger" onClick={() => confirm('Delete this day?') && store.remove('logs', l.id)}>Delete</button>}
         {saved && <span className="badge good">✓ Saved</span>}
       </div>
     </div>
@@ -245,7 +245,7 @@ function ImportLogs({ onClose }: { onClose: () => void }) {
       const { logs: parsed, skipped } = logsFromCSV(text, patient.id, monthFirst);
       const existing = new Set(logs.map((l) => l.date));
       const fresh = parsed.filter((l) => !existing.has(l.date));
-      await db.logs.bulkAdd(fresh);
+      await store.bulkPut('logs', fresh);
       setMsg(`Imported ${fresh.length} days. ${parsed.length - fresh.length} already existed, ${skipped} rows skipped.`);
     } catch (e) {
       setMsg((e as Error).message);

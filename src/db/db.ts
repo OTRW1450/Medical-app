@@ -1,27 +1,46 @@
-import Dexie, { type EntityTable } from 'dexie';
-import type {
-  Attachment,
-  DailyLog,
-  InsightState,
-  LabResult,
-  MedicalEvent,
-  Medication,
-  Patient,
-  Question,
-} from '../types';
+import Dexie, { type Table } from 'dexie';
+
+/**
+ * On-disk shape of every record: only random IDs are stored in the clear;
+ * all content (names, dates, findings, values…) is AES-GCM encrypted.
+ */
+export interface EncRow {
+  id: string;
+  patientId?: string;
+  eventId?: string;
+  iv?: Uint8Array;
+  ct?: ArrayBuffer;
+  /** attachments only: separately encrypted file bytes */
+  biv?: Uint8Array;
+  bct?: ArrayBuffer;
+}
+
+export interface KeyMeta {
+  id: 'key';
+  salt: Uint8Array;
+  iv: Uint8Array;
+  wrapped: ArrayBuffer;
+  iterations: number;
+  createdAt: number;
+}
+
+export const RECORD_TABLES = ['patients', 'events', 'meds', 'labs', 'logs', 'insightStates', 'questions'] as const;
+export type RecordTable = (typeof RECORD_TABLES)[number];
 
 class ChronicleDB extends Dexie {
-  patients!: EntityTable<Patient, 'id'>;
-  events!: EntityTable<MedicalEvent, 'id'>;
-  meds!: EntityTable<Medication, 'id'>;
-  labs!: EntityTable<LabResult, 'id'>;
-  logs!: EntityTable<DailyLog, 'id'>;
-  attachments!: EntityTable<Attachment, 'id'>;
-  insightStates!: EntityTable<InsightState, 'id'>;
-  questions!: EntityTable<Question, 'id'>;
+  patients!: Table<EncRow, string>;
+  events!: Table<EncRow, string>;
+  meds!: Table<EncRow, string>;
+  labs!: Table<EncRow, string>;
+  logs!: Table<EncRow, string>;
+  attachments!: Table<EncRow, string>;
+  insightStates!: Table<EncRow, string>;
+  questions!: Table<EncRow, string>;
+  meta!: Table<KeyMeta, string>;
 
   constructor() {
     super('pain-chronicle');
+    // v1 (unencrypted, content indexes) – kept so existing installs upgrade cleanly.
     this.version(1).stores({
       patients: 'id, name',
       events: 'id, patientId, [patientId+date], type',
@@ -32,33 +51,19 @@ class ChronicleDB extends Dexie {
       insightStates: 'id, patientId',
       questions: 'id, patientId',
     });
+    // v2: only opaque IDs are indexed; content is encrypted (see store.ts).
+    this.version(2).stores({
+      patients: 'id',
+      events: 'id, patientId',
+      meds: 'id, patientId',
+      labs: 'id, patientId',
+      logs: 'id, patientId',
+      attachments: 'id, patientId, eventId',
+      insightStates: 'id, patientId',
+      questions: 'id, patientId',
+      meta: 'id',
+    });
   }
 }
 
 export const db = new ChronicleDB();
-
-const PATIENT_TABLES = ['events', 'meds', 'labs', 'logs', 'attachments', 'insightStates', 'questions'] as const;
-
-export async function deletePatient(patientId: string) {
-  await db.transaction('rw', [db.patients, ...PATIENT_TABLES.map((t) => db[t])], async () => {
-    for (const t of PATIENT_TABLES) await db[t].where('patientId').equals(patientId).delete();
-    await db.patients.delete(patientId);
-  });
-}
-
-export async function loadPatientData(patientId: string) {
-  const [patient, events, meds, labs, logs, questions] = await Promise.all([
-    db.patients.get(patientId),
-    db.events.where('patientId').equals(patientId).toArray(),
-    db.meds.where('patientId').equals(patientId).toArray(),
-    db.labs.where('patientId').equals(patientId).toArray(),
-    db.logs.where('patientId').equals(patientId).toArray(),
-    db.questions.where('patientId').equals(patientId).toArray(),
-  ]);
-  if (!patient) return undefined;
-  events.sort((a, b) => a.date.localeCompare(b.date));
-  meds.sort((a, b) => a.startDate.localeCompare(b.startDate));
-  labs.sort((a, b) => a.date.localeCompare(b.date));
-  logs.sort((a, b) => a.date.localeCompare(b.date));
-  return { patient, events, meds, labs, logs, questions };
-}

@@ -26,7 +26,7 @@ export function Welcome() {
         <div className="card"><h3>Take it to the doctor</h3><p className="muted">A printable one-page summary and a question list for your next appointment.</p></div>
       </div>
       <div className="banner">
-        🔒 <b>Private by design.</b> Everything is stored only in this browser on this device. The app makes no network requests and sends nothing anywhere. Use <i>Data &amp; privacy → Export</i> to keep (encrypted) backups.
+        🔒 <b>Private by design.</b> Everything is encrypted with your passcode and stored only on this device. The app works offline, makes no network requests and sends nothing anywhere. Use <i>Data &amp; privacy → Export</i> to keep encrypted backups.
       </div>
       <div className="row" style={{ gap: 10 }}>
         <button className="primary" onClick={() => setCreate(true)}>

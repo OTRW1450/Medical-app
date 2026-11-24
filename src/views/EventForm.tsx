@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { attachments as attStore, store, type AttachmentMeta } from '../db/store';
 import { uid } from '../lib/id';
 import { today } from '../lib/dates';
 import { BODY_REGIONS, BODY_SYSTEMS, MODALITIES } from '../lib/taxonomy';
@@ -30,7 +30,7 @@ export function EventForm({ event, onClose }: { event: MedicalEvent; onClose: ()
   const [files, setFiles] = useState<File[]>([]);
   const isNew = !events.some((x) => x.id === event.id);
   const set = <K extends keyof MedicalEvent>(k: K, v: MedicalEvent[K]) => setE((p) => ({ ...p, [k]: v }));
-  const attachments = useLiveQuery(() => db.attachments.where('eventId').equals(event.id).toArray(), [event.id]);
+  const attachments = useLiveQuery(() => attStore.metaByEvent(event.id), [event.id]);
   const specialties = useMemo(() => [...new Set(events.map((x) => x.specialty).filter(Boolean) as string[])].sort(), [events]);
   const providers = useMemo(() => [...new Set(events.map((x) => x.provider).filter(Boolean) as string[])].sort(), [events]);
   const tags = useMemo(() => [...new Set(events.flatMap((x) => x.tags))].sort(), [events]);
@@ -41,19 +41,15 @@ export function EventForm({ event, onClose }: { event: MedicalEvent; onClose: ()
     let date = e.date;
     if (e.datePrecision === 'year') date = `${date.slice(0, 4)}-01-01`;
     if (e.datePrecision === 'month') date = `${date.slice(0, 7)}-01`;
-    await db.transaction('rw', db.events, db.attachments, async () => {
-      await db.events.put({ ...e, date, title: e.title.trim(), updatedAt: Date.now() });
-      for (const f of files)
-        await db.attachments.add({ id: uid(), patientId: e.patientId, eventId: e.id, name: f.name, mime: f.type || 'application/octet-stream', size: f.size, blob: f, addedAt: Date.now() });
-    });
+    await store.put('events', { ...e, date, title: e.title.trim(), updatedAt: Date.now() });
+    for (const f of files)
+      await attStore.put({ id: uid(), patientId: e.patientId, eventId: e.id, name: f.name, mime: f.type || 'application/octet-stream', size: f.size, blob: f, addedAt: Date.now() });
     onClose();
   };
   const remove = async () => {
     if (!confirm(`Delete "${e.title}" and its attachments?`)) return;
-    await db.transaction('rw', db.events, db.attachments, async () => {
-      await db.attachments.where('eventId').equals(e.id).delete();
-      await db.events.delete(e.id);
-    });
+    await attStore.removeByEvent(e.id);
+    await store.remove('events', e.id);
     onClose();
   };
 
@@ -180,15 +176,15 @@ export function EventForm({ event, onClose }: { event: MedicalEvent; onClose: ()
         </div>
         <Field label="Attachments (reports, scan images, letters)" hint="Files stay on this device." full>
           <input type="file" multiple onChange={(x) => setFiles([...(x.target.files ?? [])])} />
-          {(attachments?.length ?? 0) > 0 && <AttachmentList ids={attachments!.map((a) => a.id)} editable />}
+          {(attachments?.length ?? 0) > 0 && <AttachmentList items={attachments!} editable />}
         </Field>
       </div>
     </Modal>
   );
 }
 
-export function AttachmentList({ ids, editable }: { ids: string[]; editable?: boolean }) {
-  const atts = useLiveQuery(() => db.attachments.bulkGet(ids), [ids.join(',')]);
+export function AttachmentList({ items, editable }: { items: AttachmentMeta[]; editable?: boolean }) {
+  const atts = items;
   const [preview, setPreview] = useState<{ url: string; mime: string; name: string } | null>(null);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview.url); }, [preview]);
   return (
@@ -200,13 +196,13 @@ export function AttachmentList({ ids, editable }: { ids: string[]; editable?: bo
               type="button"
               className="x"
               style={{ color: 'var(--accent)', fontSize: 13 }}
-              onClick={() => setPreview({ url: URL.createObjectURL(a!.blob), mime: a!.mime, name: a!.name })}
+              onClick={async () => { const full = await attStore.get(a!.id); if (full) setPreview({ url: URL.createObjectURL(full.blob), mime: full.mime, name: full.name }); }}
             >
               📎 {a!.name}
             </button>
             <span className="faint">{Math.ceil(a!.size / 1024)} KB</span>
             {editable && (
-              <button type="button" className="x" aria-label={`Delete ${a!.name}`} onClick={() => confirm(`Delete ${a!.name}?`) && db.attachments.delete(a!.id)}>
+              <button type="button" className="x" aria-label={`Delete ${a!.name}`} onClick={() => confirm(`Delete ${a!.name}?`) && attStore.remove(a!.id)}>
                 ×
               </button>
             )}

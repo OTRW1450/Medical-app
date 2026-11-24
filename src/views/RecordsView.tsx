@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { attachments as attStore, type AttachmentMeta } from '../db/store';
 import { usePatient } from '../state';
 import { EVENT_TYPES, EVENT_TYPE_LABEL, type EventType, type MedicalEvent } from '../types';
 import { ageAt, fmtDate } from '../lib/dates';
@@ -16,10 +16,10 @@ export function RecordsView({ params }: { params: URLSearchParams }) {
   const [types, setTypes] = useState<EventType[]>([]);
   const [sort, setSort] = useState<'new' | 'old'>('new');
   const focusId = params.get('id');
-  const attachments = useLiveQuery(() => db.attachments.where('patientId').equals(patient.id).toArray(), [patient.id]);
+  const attachments = useLiveQuery(() => attStore.metaByPatient(patient.id), [patient.id]);
   const attByEvent = useMemo(() => {
-    const m = new Map<string, string[]>();
-    for (const a of attachments ?? []) if (a.eventId) m.set(a.eventId, [...(m.get(a.eventId) ?? []), a.id]);
+    const m = new Map<string, AttachmentMeta[]>();
+    for (const a of attachments ?? []) if (a.eventId) m.set(a.eventId, [...(m.get(a.eventId) ?? []), a]);
     return m;
   }, [attachments]);
 
@@ -119,7 +119,7 @@ export function RecordsView({ params }: { params: URLSearchParams }) {
                       {e.tags.map((r) => <span className="chip" key={r}>#{r}</span>)}
                     </div>
                   )}
-                  {attByEvent.get(e.id) && <AttachmentList ids={attByEvent.get(e.id)!} />}
+                  {attByEvent.get(e.id) && <AttachmentList items={attByEvent.get(e.id)!} />}
                 </div>
                 <div>
                   <button className="small" onClick={() => setEditing(e)}>Edit</button>

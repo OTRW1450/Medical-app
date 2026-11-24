@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { db } from '../db/db';
+import { store } from '../db/store';
 import { usePatient } from '../state';
 import { uid } from '../lib/id';
 import { ageAt, daysBetween, fmtDate, today } from '../lib/dates';
@@ -165,8 +165,8 @@ export function SummaryView() {
               {q.text} {q.forSpecialty && <span className="faint">({q.forSpecialty})</span>}
               <span className="no-print">
                 {' '}
-                <button className="small ghost" onClick={() => db.questions.update(q.id, { done: true })}>✓ Asked</button>
-                <button className="small ghost" onClick={() => db.questions.delete(q.id)}>Remove</button>
+                <button className="small ghost" onClick={() => store.update('questions', q.id, { done: true })}>✓ Asked</button>
+                <button className="small ghost" onClick={() => store.remove('questions', q.id)}>Remove</button>
               </span>
             </li>
           ))}
@@ -177,7 +177,7 @@ export function SummaryView() {
           onSubmit={async (e) => {
             e.preventDefault();
             if (!newQ.trim()) return;
-            await db.questions.add({ id: uid(), patientId: patient.id, text: newQ.trim(), done: false, createdAt: Date.now() });
+            await store.put('questions', { id: uid(), patientId: patient.id, text: newQ.trim(), done: false, createdAt: Date.now() });
             setNewQ('');
           }}
         >
@@ -187,7 +187,7 @@ export function SummaryView() {
         {questions.some((q) => q.done) && (
           <details className="no-print" style={{ marginTop: 10 }}>
             <summary>Already asked ({questions.filter((q) => q.done).length})</summary>
-            <ul>{questions.filter((q) => q.done).map((q) => <li key={q.id}>{q.text} <button className="small ghost" onClick={() => db.questions.update(q.id, { done: false })}>Re-open</button></li>)}</ul>
+            <ul>{questions.filter((q) => q.done).map((q) => <li key={q.id}>{q.text} <button className="small ghost" onClick={() => store.update('questions', q.id, { done: false })}>Re-open</button></li>)}</ul>
           </details>
         )}
       </div>

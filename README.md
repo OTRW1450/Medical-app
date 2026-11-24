@@ -15,8 +15,8 @@ A private, local-first app that keeps a long, complicated medical history in one
 | **Medications** | Everything tried, with dose, reason, dates, effect rating, side effects and stop reason. A treatment-history chart grouped by drug class shows diary pain before and after each start |
 | **Lab results** | Results grouped across labs and name variants, with trend charts and a reference band. You can **paste lines straight from a lab report** (`CRP 9.1 mg/L 0-5 H`) or import a CSV |
 | **Patterns** | See below. You can pin, dismiss or add any pattern to the question list |
-| **Doctor summary** | A printable one-page summary: problem list, ruled-out diagnoses, key timeline, imaging, abnormal labs, current and previously tried medications, diary summary, patterns to discuss and questions for the appointment |
-| **Data & privacy** | Encrypted backup/restore (AES-256-GCM, PBKDF2 600k), multiple patients, a demo patient, delete |
+| **Reports & printouts** | **Written summary**: a plain-language history (brief or detailed) assembled sentence by sentence from the record. Filter it by dates, body system or body area, then print it, save it as PDF, copy it as text or download it as .txt. **Timetable of events**: a clean, printable chronological table (date, age, type, event, who, details) with year headings, filters, medication starts/stops, lab results, portrait or landscape printing and CSV export for spreadsheets. **Doctor one-pager**: problem list, key timeline, imaging, abnormal labs, medications, diary summary, patterns and questions. **Emergency card**: allergies, current meds and diagnoses on a small printable card |
+| **Data & privacy** | Passcode and auto-lock settings, install instructions, encrypted backup/restore, multiple patients, a demo patient, delete |
 
 ### Pattern engine (`src/analysis/`)
 
@@ -33,12 +33,14 @@ A private, local-first app that keeps a long, complicated medical history in one
 - **Treatment response**: diary pain before and after each medication, many failed treatments (a sign the working diagnosis may be incomplete), strong responders as clues (NSAID → inflammatory, antihistamine → mast cell), and new symptoms after starting a drug.
 - **Diary statistics**: same-day and *next-day* correlations, trigger effects (including triggers that **don't** matter), menstrual-cycle effect, symptoms that cluster on flare days, seasonality and recent trend.
 
-## Privacy
+## Privacy & security
 
-- All data lives in the browser's IndexedDB on the device. There is no server and no account.
-- The production build ships a Content-Security-Policy with `connect-src 'none'`, so the app *cannot* send data anywhere.
-- Clearing browser data erases the records, so **export encrypted backups regularly**.
-- Don't use incognito/private windows for real records.
+- **Encrypted at rest.** On first launch you choose a passcode. A random 256-bit key encrypts every record and every attached file (AES-256-GCM) before it's written to the device. That key is itself encrypted with a key derived from the passcode (PBKDF2-SHA256, 600,000 iterations). Only random IDs are stored unencrypted. The passcode itself is never stored.
+- **Auto-lock.** The app locks after a period of inactivity (1/5/15/60 minutes, or never) and when it's left in the background too long. There's also a **Lock** button. Locking discards the key from memory.
+- **No network.** There's no server and no account. The production build ships a Content-Security-Policy with `connect-src 'none'`, and the service worker only serves the app's own cached files.
+- **Offline & installable.** Once it has been opened from its hosted address it can be installed (Install button, *Add to Home Screen* on iPhone) and then runs with no internet at all.
+- **Forgotten passcode = lost data**, unless you have an encrypted backup. Export backups regularly (*Data & privacy*).
+- Remaining risks: someone who knows the passcode, malware on the device, browser extensions that can read pages, and unencrypted exports. Use the encrypted backup option.
 
 ## Running it
 
@@ -50,7 +52,9 @@ npm run build      # static build in dist/
 npm run preview    # serve the build at http://localhost:4173
 ```
 
-The `dist/` folder is a fully static site. You can host it anywhere static (GitHub Pages, Netlify, a local web server). Opening `index.html` straight from the file system isn't supported, because browsers restrict storage and modules on `file://`.
+The `dist/` folder is a fully static site. You can host it anywhere static (GitHub Pages, Netlify, a local web server). Installing it as an app and using it offline require **HTTPS** (or `localhost`). Opening `index.html` straight from the file system isn't supported.
+
+Hosting the app does not expose any records: the host only serves the app's code. Records are created and encrypted on each user's device.
 
 Click **"Explore with a fictional demo patient"** on first launch to see a 20-year example record and the patterns it produces.
 
@@ -68,7 +72,8 @@ Click **"Explore with a fictional demo patient"** on first launch to see a 20-ye
 ```
 src/
   analysis/    pattern engine (pure functions, unit-tested)
-  db/          Dexie schema, encrypted backup, demo patient
+  db/          Dexie schema, passcode/key management, encrypted store, backups, demo patient
+  reports/     written summaries & timetable builders (pure functions, unit-tested)
   lib/         dates, CSV / pasted-lab parsing, taxonomy, router
   components/  charts (line, swimlane), body map, UI primitives
   views/       one file per screen
