@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.DS_Store
+# Never commit real patient data exports
+*.pchron.json
+*.pchron.enc
