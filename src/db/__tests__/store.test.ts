@@ -27,7 +27,9 @@ describe('encrypted store', () => {
     const pid = await importData(buildDemo(0));
     await attachments.put({ id: 'a1', patientId: pid, name: 'mri-report.pdf', mime: 'application/pdf', size: 11, blob: new Blob(['SECRET-SCAN']), addedAt: 0 });
     const dump = await rawDump();
-    for (const word of ['Fibromyalgia', 'Demo patient', 'CRP', 'Ibuprofen', 'sacroiliac', 'mri-report', 'SECRET-SCAN', '2016-02-18', 'prolonged sitting'])
+    // Only distinctive strings of 9+ characters: random ciphertext can contain a
+    // short word like "CRP" by pure chance, which would make the test flaky.
+    for (const word of ['Fibromyalgia', 'Demo patient', '"test":"CRP"', 'Ibuprofen', 'sacroiliac', 'mri-report', 'SECRET-SCAN', '2016-02-18', 'prolonged sitting'])
       expect(dump).not.toContain(word);
     const data = await loadPatientData(pid);
     expect(data!.events.some((e) => e.title === 'Fibromyalgia')).toBe(true);
