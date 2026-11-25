@@ -62,6 +62,9 @@ export function RecordsView({ params }: { params: URLSearchParams }) {
           <p className="muted">Every appointment, scan, diagnosis, procedure and life event – in one searchable list.</p>
         </div>
         <div className="spacer" />
+        <a className="btn" href="#/import">
+          <Icon.upload /> Import PDFs / photos
+        </a>
         <button className="primary" onClick={() => setEditing(blankEvent(patient.id))}>
           <Icon.plus /> Add record
         </button>

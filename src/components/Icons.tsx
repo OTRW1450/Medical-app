@@ -10,6 +10,7 @@ export const Icon = {
   insights: () => (<svg {...P}><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z" /></svg>),
   summary: () => (<svg {...P}><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M6 14h12v7H6z" /></svg>),
   data: () => (<svg {...P}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></svg>),
+  upload: () => (<svg {...P}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></svg>),
   plus: () => (<svg {...P}><path d="M12 5v14M5 12h14" /></svg>),
   pin: () => (<svg {...P}><path d="M12 17v5M8 3h8l-1 7 3 4H6l3-4z" /></svg>),
   paperclip: () => (<svg {...P} width={14} height={14}><path d="M21 11l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" /></svg>),

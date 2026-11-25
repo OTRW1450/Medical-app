@@ -42,6 +42,9 @@ export function Dashboard() {
           </p>
         </div>
         <div className="spacer" />
+        <a className="btn" href={href('import')}>
+          <Icon.upload /> Import documents
+        </a>
         <a className="btn" href={href('log')}>
           <Icon.log /> Log today
         </a>

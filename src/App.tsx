@@ -10,6 +10,7 @@ import { MedsView } from './views/MedsView';
 import { LabsView } from './views/LabsView';
 import { InsightsView } from './views/InsightsView';
 import { ReportsView } from './views/ReportsView';
+import { ImportView } from './views/ImportView';
 import { lock } from './db/keys';
 import { applyUpdate, promptInstall, usePwa } from './pwa';
 import { DataView } from './views/DataView';
@@ -20,6 +21,7 @@ const NAV = [
   { path: 'dashboard', label: 'Overview', icon: Icon.dashboard },
   { path: 'timeline', label: 'Timeline', icon: Icon.timeline },
   { path: 'insights', label: 'Patterns', icon: Icon.insights },
+  { path: 'import', label: 'Import documents', icon: Icon.upload },
   { path: 'records', label: 'Records & scans', icon: Icon.records },
   { path: 'log', label: 'Pain diary', icon: Icon.log },
   { path: 'meds', label: 'Medications', icon: Icon.meds },
@@ -56,6 +58,7 @@ export function App() {
       case 'labs': view = <LabsView params={route.params} />; break;
       case 'insights': view = <InsightsView />; break;
       case 'reports': view = <ReportsView params={route.params} />; break;
+      case 'import': view = <ImportView />; break;
       case 'summary': view = <ReportsView params={new URLSearchParams('tab=doctor')} />; break;
       case 'data': view = <DataView />; break;
       default: view = <Dashboard />;

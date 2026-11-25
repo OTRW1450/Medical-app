@@ -10,6 +10,7 @@ A private, local-first app that keeps a long, complicated medical history in one
 |---|---|
 | **Overview** | Years since the first problem, specialties involved, abnormal labs, recent pain, top patterns, active diagnoses, current meds |
 | **Timeline** | A swimlane view of the whole history, with a monthly pain heat strip, medication bars and abnormal labs. You can **re-group by body system, body area or specialty** to see how problems spread. Below it is a year-by-year list with the patient's age |
+| **Import documents** | Drop in PDFs or photos of lab results, scan reports, visit notes, clinic letters, after-visit summaries and discharge summaries. Text is read **on the device**: typed PDFs directly with pdf.js, scans and photos with Tesseract OCR bundled into the app. Each document is sorted (labs / imaging / visit / discharge) and broken into proposed items: the timeline record with its date, clinician and specialty, diagnoses (confirmed, suspected, resolved or ruled out), lab values with ranges and flags, medication starts, stops and dose changes, medication lists, allergies, tests ordered, referrals and follow-up timing. Items already in the record are recognised and left unticked. You review everything next to the original before anything is saved, and the original file is attached to the record |
 | **Records & scans** | Every event (symptom onset, diagnosis with status *suspected/ruled out*, visit, imaging, procedure, injury, infection, life event), with verbatim report text, body areas, systems, tags and attached PDFs or images. Full-text search with highlighting |
 | **Pain diary** | Daily check-in with a front/back body map (intensity and pain quality per area), sleep, fatigue, stress, mood, activity, function, symptoms, triggers and menstrual cycle. Includes charts, a heat map and CSV import |
 | **Medications** | Everything tried, with dose, reason, dates, effect rating, side effects and stop reason. A treatment-history chart grouped by drug class shows diary pain before and after each start |
@@ -37,7 +38,7 @@ A private, local-first app that keeps a long, complicated medical history in one
 
 - **Encrypted at rest.** On first launch you choose a passcode. A random 256-bit key encrypts every record and every attached file (AES-256-GCM) before it's written to the device. That key is itself encrypted with a key derived from the passcode (PBKDF2-SHA256, 600,000 iterations). Only random IDs are stored unencrypted. The passcode itself is never stored.
 - **Auto-lock.** The app locks after a period of inactivity (1/5/15/60 minutes, or never) and when it's left in the background too long. There's also a **Lock** button. Locking discards the key from memory.
-- **No network.** There's no server and no account. The production build ships a Content-Security-Policy with `connect-src 'none'`, and the service worker only serves the app's own cached files.
+- **No outside network.** There's no server and no account. The production build ships a Content-Security-Policy with `connect-src 'self'`: the app can only load its own static files (the OCR engine is one of them), and the service worker never contacts any other origin. Documents are read on the device, and no AI or cloud service is involved.
 - **Offline & installable.** Once it has been opened from its hosted address it can be installed (Install button, *Add to Home Screen* on iPhone) and then runs with no internet at all.
 - **Forgot passcode → recovery key.** At setup the app shows a one-time **recovery key**: 32 characters, 160 random bits, which can be printed, downloaded or copied. You confirm you've saved it by typing its last group. The data key is also wrapped with this recovery key, so *Lock screen → Forgot passcode?* lets you enter it and choose a new passcode without touching the records. Each use retires the key and issues a new one. Under *Data & privacy* you can check that a saved key still works, or create a replacement (requires the current passcode). There is no server, email reset or security question, so there's no back door. If both the passcode and the recovery key are lost, the data can't be opened by anyone. Keep encrypted backups too.
 - **Guess throttling.** After 5 wrong passcode or recovery-key attempts the app makes you wait, starting at 30 s and doubling up to 15 min. The counter is stored with the data.
@@ -47,7 +48,7 @@ A private, local-first app that keeps a long, complicated medical history in one
 
 ```bash
 npm install
-npm run dev        # development server
+npm run dev        # development server (copies the PDF/OCR engine files into public/vendor first)
 npm test           # analysis & parser tests
 npm run build      # static build in dist/
 npm run preview    # serve the build at http://localhost:4173
@@ -75,6 +76,7 @@ src/
   analysis/    pattern engine (pure functions, unit-tested)
   db/          Dexie schema, passcode/key management, encrypted store, backups, demo patient
   reports/     written summaries & timetable builders (pure functions, unit-tested)
+  importer/    document reading (pdf.js + OCR), sorting/extraction into proposed records (unit-tested), saving
   lib/         dates, CSV / pasted-lab parsing, taxonomy, router
   components/  charts (line, swimlane), body map, UI primitives
   views/       one file per screen

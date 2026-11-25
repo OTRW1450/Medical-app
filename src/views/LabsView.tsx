@@ -57,6 +57,7 @@ export function LabsView({ params }: { params: URLSearchParams }) {
           <p className="muted">Every result in one place, with trends across years and labs. A value can be “in range” each time and still be drifting.</p>
         </div>
         <div className="spacer" />
+        <a className="btn" href="#/import">Import PDF / photo</a>
         <button onClick={() => setImporting(true)}>Paste / import results</button>
         <button className="primary" onClick={() => setAdding({ id: uid(), patientId: patient.id, date: today(), test: effSel ?? '', createdAt: Date.now() })}>
           <Icon.plus /> Add result

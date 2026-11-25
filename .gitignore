@@ -6,3 +6,4 @@ dist
 *.pchron.json
 *.pchron.enc
 *.tsbuildinfo
+public/vendor

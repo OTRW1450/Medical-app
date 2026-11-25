@@ -61,3 +61,18 @@ describe('demo patient analysis', () => {
     expect(insights.filter((i) => i.key.startsWith('followup:referral')).every((i) => !/pain/i.test(i.title))).toBe(true);
   });
 });
+
+import { laterRecordShowsDone } from '../followups';
+describe('follow-ups cleared by later records', () => {
+  it('clears an ordered MRI once a later MRI exists, and a recommended review once that specialty is seen', () => {
+    const d = buildDemo(0);
+    const base = { patientId: d.patient.id, datePrecision: 'day' as const, bodyRegions: [], systems: [], tags: [], createdAt: 0, updatedAt: 0 };
+    const visit = { ...base, id: 'v', type: 'visit' as const, date: '2025-06-12', title: 'Rheumatology consultation', findings: 'Plan: MRI of the sacroiliac joints has been requested.', followUpRecommended: true };
+    const scan = { ...base, id: 's', type: 'imaging' as const, date: '2025-03-14', title: 'MRI SI joints', findings: 'Impression: sacroiliitis. Rheumatology review recommended.', followUpRecommended: true };
+    expect(laterRecordShowsDone(visit, d)).toBe(false);
+    d.events.push(scan, visit);
+    expect(laterRecordShowsDone(scan, d)).toBe(true); // rheumatology visit came after the scan
+    d.events.push({ ...base, id: 'm2', type: 'imaging', date: '2025-08-01', title: 'MRI sacroiliac joints', modality: 'MRI' });
+    expect(laterRecordShowsDone(visit, d)).toBe(true);
+  });
+});

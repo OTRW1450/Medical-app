@@ -1,4 +1,4 @@
-import type { PatientData } from '../types';
+import type { MedicalEvent, PatientData } from '../types';
 import { EVENT_TYPE_LABEL } from '../types';
 import { daysBetween, fmtDate, fmtSpan, today } from '../lib/dates';
 import { findAffirmed } from './corpus';
@@ -43,6 +43,7 @@ export function followupInsights(d: PatientData): Insight[] {
     if (e.followUpDone) continue;
     const quote = e.findings ? findAffirmed(e.findings, FOLLOWUP_RE) : undefined;
     if (!e.followUpRecommended && !quote) continue;
+    if (laterRecordShowsDone(e, d)) continue;
     const ago = daysBetween(e.date, now);
     out.push({
       key: `followup:event:${e.id}`,
@@ -95,4 +96,39 @@ export function followupInsights(d: PatientData): Insight[] {
     }
   }
   return out;
+}
+
+// What a follow-up asks for: scan types, lab tests and specialties named in it.
+const MODALITY_WORDS: [RegExp, RegExp][] = [
+  [/\bmri\b/i, /\bmri\b/i],
+  [/\bct\b/i, /\bct\b/i],
+  [/\bx-?ray|radiograph/i, /x-?ray|radiograph/i],
+  [/ultrasound|sonograph/i, /ultrasound|sonograph/i],
+  [/\bemg\b|nerve conduction/i, /\bemg\b|nerve conduction/i],
+  [/tilt[- ]table/i, /tilt[- ]table/i],
+  [/sleep study|polysomno/i, /sleep study|polysomno/i],
+  [/\becho(cardiogram)?\b/i, /\becho(cardiogram)?\b/i],
+  [/\bdexa\b|bone density/i, /\bdexa\b|bone density/i],
+  [/colonoscopy|endoscopy|gastroscopy/i, /colonoscopy|endoscopy|gastroscopy/i],
+];
+const LAB_WORDS = /\b(hla-?b27|crp|esr|ferritin|b12|vitamin d|tsh|ana|cbc|fbc|tryptase|a1c|hba1c|ck|iron studies|bloods?|blood tests?)\b/gi;
+
+/** True if something dated after this event looks like the follow-up it asked for. */
+export function laterRecordShowsDone(e: MedicalEvent, d: PatientData): boolean {
+  const text = `${e.findings ?? ''} ${e.notes ?? ''}`;
+  const later = d.events.filter((x) => x.date > e.date && x.id !== e.id);
+  for (const [want, have] of MODALITY_WORDS)
+    if (want.test(text) && later.some((x) => (x.type === 'imaging' || x.type === 'procedure') && have.test(`${x.title} ${x.modality ?? ''}`))) return true;
+  const labs = [...text.matchAll(LAB_WORDS)].map((m) => m[1].toLowerCase());
+  if (labs.length && d.labs.some((l) => l.date > e.date && labs.some((w) => /^bloods?$|^blood tests?$/.test(w) || l.test.toLowerCase().includes(w.replace(/-/g, ''))))) return true;
+  for (const m of text.matchAll(/\b(review|referral|opinion|refer(?:red)? to|see)\b[^.\n]{0,40}/gi)) {
+    const st = stem(m[0]);
+    if (st && later.some((x) => x.type === 'visit' && stem(`${x.specialty ?? ''} ${x.title}`) === st)) return true;
+  }
+  // a specialty named just before "review recommended" ("Rheumatology review recommended")
+  for (const m of text.matchAll(/([a-z]+)\s+(?:review|referral|opinion)\s+(?:is\s+)?(?:recommended|advised|suggested)/gi)) {
+    const st = stem(m[1]);
+    if (st && later.some((x) => x.type === 'visit' && stem(`${x.specialty ?? ''} ${x.title}`) === st)) return true;
+  }
+  return false;
 }

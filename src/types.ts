@@ -142,6 +142,8 @@ export interface Attachment {
   size: number;
   blob: Blob;
   addedAt: number;
+  /** SHA-256 of the file, to notice the same document being imported twice */
+  sha256?: string;
 }
 
 export interface InsightState {
