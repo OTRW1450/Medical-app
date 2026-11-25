@@ -94,3 +94,163 @@ Discharge medications:
 Paracetamol 1 g four times daily as needed
 Ondansetron 4 mg as needed
 Follow-up: General surgery clinic in 6 weeks for consideration of cholecystectomy.`;
+
+// ---- US portal / lab layouts (fictional content) ----
+
+export const MYCHART_LAB = `MyChart
+Test Results
+CBC W/ DIFFERENTIAL
+Collected on Sep 30, 2024 8:15 AM
+Results
+Hemoglobin
+Normal range: 12.0 - 15.5 g/dL
+12.4
+WBC
+Normal range: 4.0 - 11.0 K/uL
+3.2 Low
+Platelet Count
+Normal range: 150 - 400 K/uL
+210
+C-REACTIVE PROTEIN
+Collected on Sep 30, 2024 8:15 AM
+Results
+C-Reactive Protein
+Normal range: 0.0 - 5.0 mg/L
+9.1 High
+HLA-B27 ANTIGEN
+Collected on Sep 30, 2024 8:15 AM
+Results
+HLA-B27
+Value
+Positive
+Abnormal
+Printed on 11/24/2026 10:02 AM
+MyChart® licensed from Epic Systems Corporation © 1999 - 2024
+Page 1 of 1`;
+
+export const QUEST = `Quest Diagnostics
+Patient Information        Specimen Information        Client Information
+DEMO, ALEX                 Specimen: AB123456C         Client #: 12345
+DOB: 04/12/1990 AGE: 34    Collected: 09/30/2024 / 08:15 EDT
+Gender: F                  Received: 09/30/2024 / 12:00 EDT
+                           Reported: 10/01/2024 / 06:30 EDT
+Test Name                         In Range    Out Of Range    Reference Range    Lab
+C-REACTIVE PROTEIN                            9.1 H           <8.0 mg/L          EN
+FERRITIN                                      13 L            16-232 ng/mL       EN
+TSH                               2.10                        0.40-4.50 mIU/L    EN
+VITAMIN D,25-OH,TOTAL,IA                      18 L            30-100 ng/mL       EN
+HLA-B27 ANTIGEN                   NEGATIVE                    NEGATIVE           EN`;
+
+export const LABCORP = `LabCorp
+Patient Report
+Specimen ID: 123-456-7890-0   Control ID: 12345678
+Date Collected: 09/30/2024    Date Received: 09/30/2024    Date Reported: 10/01/2024
+TESTS                       RESULT       FLAG    UNITS     REFERENCE INTERVAL    LAB
+C-Reactive Protein, Quant   9.1          High    mg/L      0.0-4.9               01
+Ferritin, Serum             13           Low     ng/mL     15-150                01
+Vitamin B12                 290                  pg/mL     232-1245              01
+Sed Rate (ESR)              12                   mm/hr     0-32                  01
+Hemoglobin A1c              5.4                  %         4.8-5.6               01`;
+
+export const EPIC_NOTE = `Progress Notes
+Jordan Lee, NP at 3/5/2025 10:15 AM
+Status: Signed
+Family Medicine
+Office Visit
+Date of Service: 3/5/2025
+
+Chief Complaint
+Patient presents with
+• Fatigue
+• Dizziness
+
+HPI
+Alex is a 34 y.o. female who presents with 6 months of fatigue and lightheadedness on standing. Denies chest pain. Heavy periods.
+
+Current Outpatient Medications on File Prior to Visit
+Medication Sig
+cetirizine (ZYRTEC) 10 MG tablet Take 10 mg by mouth 2 (two) times daily.
+naproxen (NAPROSYN) 500 MG tablet Take 1 tablet (500 mg total) by mouth 2 (two) times daily with meals.
+
+Allergies
+Allergen Reactions
+• Codeine Nausea And Vomiting
+
+Physical Exam
+BP 104/68 | Pulse 112 | Temp 36.8 °C
+General: tired appearing.
+Orthostatic vitals: HR 78 lying, 118 standing.
+
+Assessment & Plan
+1. Fatigue, unspecified type
+- CBC with Differential; Future
+- Ferritin; Future
+2. Orthostatic tachycardia
+Suspect POTS. Ordered tilt table test. Increase fluids and salt.
+- Referral to Cardiology
+3. Iron deficiency anemia, unspecified iron deficiency anemia type
+- Start ferrous sulfate 325 (65 FE) MG tablet; Take 1 tablet by mouth daily.
+
+Encounter Diagnoses
+Name Primary?
+Fatigue, unspecified type Yes
+Orthostatic tachycardia
+Iron deficiency anemia, unspecified iron deficiency anemia type
+
+Orders Placed This Encounter
+Procedures
+• CBC with Differential
+• Ferritin
+• Tilt table test
+• Ambulatory referral to Cardiology
+Medications
+• ferrous sulfate 325 (65 FE) MG tablet
+
+Return in about 6 weeks (around 4/16/2025).
+
+Electronically signed by Jordan Lee, NP at 3/5/2025 10:40 AM`;
+
+export const EPIC_AVS = `AFTER VISIT SUMMARY
+Alex Demo  MRN: 12345678
+3/5/2025  Family Medicine Clinic  555-555-0100
+
+Instructions from Jordan Lee, NP
+Drink 2-3 liters of fluid per day and increase salt intake.
+Return in about 6 weeks (around 4/16/2025).
+
+Today's Visit
+You saw Jordan Lee, NP on Wednesday March 5, 2025.
+Reason for visit
+Fatigue
+Dizziness
+
+Diagnoses
+Fatigue, unspecified type
+Orthostatic tachycardia
+Iron deficiency anemia
+
+Done Today
+CBC with Differential
+Ferritin
+
+Your Medication List
+START taking:
+ferrous sulfate 325 (65 FE) MG tablet
+Take 1 tablet (325 mg total) by mouth daily.
+
+CHANGE how you take:
+naproxen 500 MG tablet
+Commonly known as: NAPROSYN
+Take 1 tablet (500 mg total) by mouth 2 (two) times daily with meals as needed.
+What changed: when to take this
+
+STOP taking:
+amitriptyline 10 MG tablet
+Commonly known as: ELAVIL
+
+CONTINUE taking:
+cetirizine 10 MG tablet
+Take 10 mg by mouth 2 (two) times daily.
+
+MyChart® licensed from Epic Systems Corporation © 1999 - 2024
+Printed on 11/24/2026 10:02 AM    Page 1 of 2`;

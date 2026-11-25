@@ -159,6 +159,15 @@ export function ImportView() {
                 item={current}
                 onChange={(parsed) => patch(current.id, { parsed })}
                 onReparse={(over) => patch(current.id, { ...over, parsed: parse(current, current.extracted!.text, over) })}
+                onOcr={async () => {
+                  patch(current.id, { status: 'reading', progress: undefined });
+                  try {
+                    const extracted = await extractText(current.file, (progress) => patch(current.id, { progress }), { forceOcr: true });
+                    patch(current.id, { status: 'ready', extracted, parsed: parse(current, extracted.text) });
+                  } catch (e) {
+                    patch(current.id, { status: 'error', error: (e as Error).message });
+                  }
+                }}
                 onSkip={() => { patch(current.id, { status: 'skipped' }); goNext(current.id); }}
                 onSave={async () => {
                   patch(current.id, { status: 'saving' });
@@ -211,10 +220,11 @@ export function ImportView() {
 const STATUSES: DiagnosisStatus[] = ['active', 'suspected', 'resolved', 'ruled-out'];
 const ACTION_LABEL = { start: 'Start', stop: 'Stop', change: 'Dose change', list: 'On medication list' } as const;
 
-function Review({ item, onChange, onReparse, onSkip, onSave }: {
+function Review({ item, onChange, onReparse, onOcr, onSkip, onSave }: {
   item: Item;
   onChange: (p: ParsedDoc) => void;
   onReparse: (over: Partial<Pick<Item, 'kind' | 'order'>>) => void;
+  onOcr: () => void;
   onSkip: () => void;
   onSave: () => void;
 }) {
@@ -277,6 +287,12 @@ function Review({ item, onChange, onReparse, onSkip, onSave }: {
         <details style={{ marginTop: 10 }}>
           <summary className="muted" style={{ fontSize: 13.5 }}>Show the text that was read</summary>
           <pre className="extracted">{item.extracted!.text}</pre>
+          {fileKind(item.file) === 'pdf' && (
+            <div className="row" style={{ marginTop: 8 }}>
+              <span className="faint" style={{ fontSize: 13 }}>Text garbled, jumbled or missing?</span>
+              <button className="small" onClick={onOcr}>Read again using text recognition</button>
+            </div>
+          )}
         </details>
       </div>
 

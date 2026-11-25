@@ -23,12 +23,12 @@ const MON = '(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|a
 
 const ROLE_LABELS: [RegExp, DateRole][] = [
   [/(d\.?\s?o\.?\s?b\.?|date of birth|birth\s?date|born)\W*$/i, 'dob'],
-  [/(date of service|service date|visit date|date of visit|encounter date|appointment date|appt date|seen on|clinic date|consultation date|date seen|date of consultation|letter date|visit)\W*$/i, 'visit'],
+  [/(date of service|service date|visit date|date of visit|encounter date|appointment date|appt date|seen on|clinic date|consultation date|date seen|date of consultation|letter date|visit|office visit|clinic visit|video visit|telemedicine visit|telephone (?:visit|encounter)|you saw [^\n]{0,60} on|you were seen [^\n]{0,60} on|appointment on)\W*$/i, 'visit'],
   [/(collected|collection date|date collected|collection|specimen collected|drawn|sample (?:taken|date|collected)|date of collection)\W*(?:on|date)?\W*$/i, 'collected'],
   [/(exam date|date of exam(?:ination)?|study date|date of study|scan date|date of scan|procedure date|examination date|date of procedure|exam)\W*$/i, 'exam'],
   [/(admission date|date of admission|admitted(?: on)?|admit date|date admitted)\W*$/i, 'admit'],
   [/(discharge date|date of discharge|discharged(?: on)?)\W*$/i, 'discharge'],
-  [/(report(?:ed)? date|date reported|reported(?: on)?|date of report|signed(?: on)?|electronically signed[^\n]*|dictated|transcribed|printed|resulted|verified|authori[sz]ed|received)\W*$/i, 'report'],
+  [/(report(?:ed)? date|date reported|reported(?: on)?|date of report|signed(?: on)?|electronically signed[^\n]*|dictated|transcribed|printed(?: on| by[^\n]{0,60})?|generated(?: on)?|downloaded(?: on)?|resulted(?: on)?|result date|verified|authori[sz]ed|received|around|due|next appointment|follow[- ]?up(?: on)?)\W*$/i, 'report'],
   [/(^|\n)\s*date\W*$/i, 'generic'],
 ];
 
@@ -70,7 +70,7 @@ export function findDates(text: string, order: DateOrder): FoundDate[] {
     if (!valid(y, m, d)) return;
     if (out.some((o) => o.index === index)) return;
     const before = text.slice(Math.max(0, index - 60), index);
-    const lineBefore = before.split('\n').pop() ?? '';
+    const lineBefore = (before.split('\n').pop() ?? '').replace(/(?:mon|tues|wednes|thurs|fri|satur|sun)day,?\s*$/i, '');
     let role: DateRole = 'none';
     for (const [re, r] of ROLE_LABELS) {
       if (re.test(lineBefore) || (r === 'generic' && re.test(before.slice(-12)))) {
@@ -102,17 +102,19 @@ export function findDates(text: string, order: DateOrder): FoundDate[] {
 export type SectionKey =
   | 'preamble' | 'reason' | 'history' | 'pmh' | 'meds' | 'dischargeMeds' | 'allergies' | 'exam' | 'vitals' | 'ros'
   | 'social' | 'family' | 'results' | 'assessment' | 'plan' | 'ap' | 'findings' | 'technique' | 'indication' | 'course' | 'procedures'
-  | 'medsStarted' | 'orders' | 'signoff';
+  | 'medsStarted' | 'medsStopped' | 'medsChanged' | 'orders' | 'signoff';
 
 const HEADINGS: [RegExp, SectionKey][] = [
-  [/^(reason for (visit|referral|consultation|appointment|admission|attendance)|chief complaints?|presenting complaints?|c\/?c|referral reason|indication for visit|reason for exam)$/i, 'reason'],
+  [/^(reason for (your )?(visit|referral|consultation|appointment|admission|attendance)|visit reason|why you were seen|presenting problem|chief complaints?|presenting complaints?|c\/?c|referral reason|indication for visit|reason for exam)$/i, 'reason'],
   [/^(history of present(ing)? (illness|complaint)|hpi|history|subjective|interval history|clinical history|clinical information|clinical details|history of presenting complaint|hpc)$/i, 'history'],
   [/^(indications?|clinical indications?|clinical question)$/i, 'indication'],
-  [/^(past medical history|pmh|pmhx|past history|medical history|problem list|active problems|past medical\/surgical history|past medical and surgical history|ongoing problems)$/i, 'pmh'],
-  [/^(medications?|current medications?|medication list|meds|current meds|outpatient medications|home medications|regular medications|drug history|dh|current outpatient medications)$/i, 'meds'],
-  [/^(discharge medications?|medications on discharge|medication changes|medications at discharge|tto)$/i, 'dischargeMeds'],
-  [/^(medications? started|new medications?|medications? prescribed|prescriptions?( this visit)?|start taking|new prescriptions?)$/i, 'medsStarted'],
-  [/^(orders( placed)?( this visit)?|tests? ordered|investigations (requested|ordered)|labs? ordered|imaging ordered)$/i, 'orders'],
+  [/^(past medical history|pmh|pmhx|past history|medical history|problem list|active problems|patient active problem list|active problem list|past medical\/surgical history|past medical and surgical history|ongoing problems)$/i, 'pmh'],
+  [/^(medications?|current medications?|medication list|your medication list|meds|current meds|outpatient medications|home medications|regular medications|drug history|dh|current outpatient medications|current outpatient (medications|prescriptions)( on file)?( prior to visit)?|outpatient medications prior to visit|medications prior to (visit|admission)|prior to admission medications|continue taking( these medications)?|keep taking( these medications)?)$/i, 'meds'],
+  [/^(discharge medications?|medications on discharge|medications at discharge|tto)$/i, 'dischargeMeds'],
+  [/^(stop taking( these medications)?|medications? discontinued( during this (encounter|visit))?|discontinued medications?|stopped medications?|medications? stopped)$/i, 'medsStopped'],
+  [/^(change how you take( these medications)?|changed medications?|medication changes|medications? changed|dose changes?)$/i, 'medsChanged'],
+  [/^(medications? started( (this|during this) (visit|encounter))?|new medications?|medications? prescribed|prescriptions?( this visit)?|start taking( these medications)?|new prescriptions?)$/i, 'medsStarted'],
+  [/^(orders( placed)?( this (visit|encounter))?|tests? ordered|investigations (requested|ordered)|labs? ordered|lab orders|imaging ordered|procedures ordered|done today|tests done today|labs done today)$/i, 'orders'],
   [/^(allerg(y|ies)( and intolerances| \/ intolerances)?|drug allergies|adverse reactions|known allergies)$/i, 'allergies'],
   [/^(physical exam(ination)?|exam(ination)?|objective|on examination|o\/e|clinical examination|examination findings|exam findings)$/i, 'exam'],
   [/^(vital signs|vitals|observations)$/i, 'vitals'],
@@ -121,8 +123,8 @@ const HEADINGS: [RegExp, SectionKey][] = [
   [/^(family history|fh|family hx)$/i, 'family'],
   [/^(results|investigations|labs|lab results|data|relevant results|test results|recent results|imaging)$/i, 'results'],
   [/^(assessment and plan|assessment\/plan|assessment & plan|a\/p|a&p|impression and plan|impression\/plan)$/i, 'ap'],
-  [/^(assessment|impressions?|diagnos[ie]s|working diagnosis|discharge diagnos[ie]s|final diagnos[ie]s|principal diagnosis|primary diagnosis|secondary diagnos[ie]s|summary|opinion|clinical impression|problems? addressed|conclusions?|diagnoses this visit|visit diagnoses)$/i, 'assessment'],
-  [/^(plan|management|recommendations?|treatment plan|plan of care|next steps|actions?|follow[- ]?up|disposition|patient instructions|instructions|referrals?)$/i, 'plan'],
+  [/^(assessment|impressions?|diagnos[ie]s|encounter diagnos[ie]s|your diagnos[ie]s|today'?s diagnos[ie]s|problem list items addressed( this visit)?|working diagnosis|discharge diagnos[ie]s|final diagnos[ie]s|principal diagnosis|primary diagnosis|secondary diagnos[ie]s|summary|opinion|clinical impression|problems? addressed|conclusions?|diagnoses this visit|visit diagnoses)$/i, 'assessment'],
+  [/^(plan|management|recommendations?|treatment plan|plan of care|next steps|actions?|follow[- ]?up|disposition|patient instructions|instructions|instructions from .{2,60}|what'?s next|what you need to do|referrals?)$/i, 'plan'],
   [/^(findings|report|result)$/i, 'findings'],
   [/^(technique|protocol|comparison|procedure details|sequences)$/i, 'technique'],
   [/^(hospital course|course in hospital|clinical course|brief hospital course|course)$/i, 'course'],
@@ -148,7 +150,7 @@ export function splitSections(text: string): Section[] {
     const line = raw.trim();
     let m = line.match(/^([A-Za-z][A-Za-z /&()'-]{0,48}?)\s*[:：]\s*(.*)$/);
     let key = m ? headingKey(m[1]) : undefined;
-    if (!key && line.length <= 50 && line.split(/\s+/).length <= 6) {
+    if (!key && line.length <= 70 && line.split(/\s+/).length <= 9) {
       key = headingKey(line);
       if (key) m = [line, line, ''] as unknown as RegExpMatchArray;
     }
@@ -156,6 +158,9 @@ export function splitSections(text: string): Section[] {
       sections.push({ key: 'signoff', heading: '', text: raw + '\n' });
       continue;
     }
+    // "Procedures" / "Medications" / "Labs" are sub-headings inside an orders list, not new sections
+    const cur = sections[sections.length - 1].key;
+    if (key && cur === 'orders' && !line.includes(':') && /^(procedures|medications?|labs?|imaging|referrals?|other orders)$/i.test(line)) key = undefined;
     if (key && m) {
       sections.push({ key, heading: m[1].trim(), text: m[2] ? m[2] + '\n' : '' });
     } else sections[sections.length - 1].text += raw + '\n';
@@ -213,6 +218,8 @@ function plausibleTestName(name: string): boolean {
   if (!/^[A-Za-z(]/.test(n)) return false;
   if (n.split(/\s+/).length > 7) return false;
   if (META_START.test(n)) return false;
+  if (/[:#@|]/.test(n)) return false; // "Specimen: AB12  Client #: 123" is header text, not a test
+  if (/^(value|result|normal range|standard range|reference range|your value|component|flag|units?|in range|out of range)$/i.test(n)) return false;
   if (/\b(the|and|was|were|is|are|with|you|your|please|we|this|that|which|should|will)\b/i.test(n) && n.split(/\s+/).length > 3) return false;
   return true;
 }
@@ -280,9 +287,20 @@ export function parseLabLine(line: string): Omit<LabResult, 'id' | 'patientId' |
       flag = f.startsWith('H') || f === '↑' || f === '>' || f.startsWith('CRIT') ? 'H' : f.startsWith('L') || f === '↓' || f === '<' ? 'L' : 'A';
       continue;
     }
-    if (!unit && UNIT.test(t)) unit = t;
+    if (!unit && UNIT.test(t)) {
+      unit = t;
+      continue;
+    }
+    // Allowed extras: previous results / dates (Labcorp), lab site codes ("EN", "01"), "/" separators.
+    if (NUM.test(t) || /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/.test(t) || /^[A-Z0-9]{1,3}$/.test(t) || /^[/|]$/.test(t) || /^(final|corrected|prelim)$/i.test(t)) continue;
+    return null; // other words ("tablet", "weeks", "by mouth") mean this isn't a lab line
   }
   if (!Number.isFinite(value)) return null;
+  // a bare number with nothing to qualify it is rarely a lab result ("Return in about 6")
+  if (unit === undefined && lo === undefined && hi === undefined && !flag && (tokens.length > vi + 1 || name.split(/\s+/).length > 3)) return null;
+  if (unit === undefined && lo === undefined && hi === undefined && Math.abs(value) >= 100000) return null; // IDs, phone numbers
+  if (/\b(mrn|dob|id|no|number|phone|tel|fax|ext|room|bed|zip|postcode)\.?$/i.test(name)) return null;
+  if (isDrugWord(name.split(/\s+/)[0]) && unit && /^(mg|mcg|g|ml|units?|iu)$/i.test(unit)) return null; // a dose, not a result
   return { test: name, value, unit, refLow: lo, refHigh: hi, flag };
 }
 
@@ -321,8 +339,8 @@ export function isDrugWord(w: string): boolean {
   return DRUG_SET.has(t) || DRUG_SUFFIX.test(t);
 }
 
-const DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|g|ml|mL|units?|iu|IU|%)\b(?:\s*\/\s*\w+)?/;
-const FREQ = /\b((?:once|twice|three times|four times)(?: a| per)? (?:daily|day)|(?:once|twice) (?:at night|in the morning|weekly)|four times daily as needed|once|twice|three times|four times|daily|nightly|at night|bd|bid|tds|tid|qds|qid|od|qd|qhs|nocte|mane|prn|as needed|weekly|every \d+ (?:hours?|days?|weeks?)|q\d+h)\b/i;
+const DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|g|ml|units?|iu|%)(?![a-z])(?:\s*\/\s*\w+)?/i;
+const FREQ = /\b(\d+ times (?:a |per )?(?:day|daily)|every \d+ (?:hours?|days?|weeks?)|at bedtime|(?:once|twice|three times|four times)(?: a| per)? (?:daily|day)|(?:once|twice) (?:at night|in the morning|weekly)|four times daily as needed|once|twice|three times|four times|daily|nightly|at night|bd|bid|tds|tid|qds|qid|od|qd|qhs|nocte|mane|prn|as needed|weekly|every \d+ (?:hours?|days?|weeks?)|q\d+h)\b/i;
 
 export interface MedMention {
   name: string;
@@ -331,8 +349,10 @@ export interface MedMention {
 }
 
 /** Find the medication named in a line like "Naproxen 500 mg tablet twice daily". */
-export function medFromLine(line: string): MedMention | undefined {
-  const words = line.replace(/[(),]/g, ' ').split(/\s+/).filter(Boolean);
+export function medFromLine(rawLine: string): MedMention | undefined {
+  // "naproxen (NAPROSYN) 500 MG tablet … 2 (two) times daily": drop bracketed brand names / words
+  const line = rawLine.replace(/\([^)]*\)/g, ' ').replace(/\s{2,}/g, ' ');
+  const words = line.replace(/[(),;]/g, ' ').split(/\s+/).filter(Boolean);
   for (let i = 0; i < Math.min(words.length, 5); i++) {
     const w = words[i];
     const multi = /^(vitamin|folic|fish|ferrous|magnesium|calcium|low)$/i.test(w) && words[i + 1] ? `${w} ${words[i + 1]}` : w;
@@ -341,8 +361,8 @@ export function medFromLine(line: string): MedMention | undefined {
       const rest = line.slice(line.indexOf(words[i]) + words[i].length);
       const d = rest.match(DOSE);
       const f = rest.match(FREQ);
-      const dose = [d?.[0], f?.[0]].filter(Boolean).join(' ') || undefined;
-      return { name: name[0].toUpperCase() + name.slice(1), dose, text: line.trim() };
+      const dose = [d?.[0].replace(/\s+/g, ' '), f?.[0]].filter(Boolean).join(' ') || undefined;
+      return { name: name[0].toUpperCase() + name.slice(1).toLowerCase(), dose, text: rawLine.trim() };
     }
   }
   return undefined;
@@ -456,7 +476,7 @@ export function detectProvider(text: string): string | undefined {
     return m && !/^(the|a|an|clinic|hospital|department|patient)$/i.test(m[1]) ? tidyName(m[1]) : undefined;
   };
   // 1. Labelled: "Provider: Dr Jane Smith", "Electronically signed by: …"
-  for (const m of text.matchAll(/(?:^|\n|[ \t]{2,}|\|)\s*(?:(?:provider|attending(?: physician)?|consultant|clinician|treating physician|physician|author|radiologist)\s*[:\-]|(?:seen|signed|electronically signed|reported|dictated|reviewed) by\s*:?)[ \t]*([^\n]*)/gi)) {
+  for (const m of text.matchAll(/(?:^|\n|[ \t]{2,}|\|)\s*(?:(?:provider|attending(?: physician)?|consultant|clinician|treating physician|physician|author|radiologist)\s*[:\-]|(?:seen|signed|electronically signed|reported|dictated|reviewed) by\s*:?|you saw|you were seen by|visit with|instructions from)[ \t]*([^\n]*)/gi)) {
     const n = nameAt(m[1]);
     if (n) return n;
   }
@@ -479,4 +499,117 @@ export function detectProvider(text: string): string | undefined {
 
 function tidyName(s: string) {
   return s.replace(/\s+/g, ' ').replace(/\s*,\s*$/, '').trim();
+}
+
+// ---------------------------------------------------------------- Block-style lab results
+
+/** "12.4", "3.2 Low", "9.1 mg/L H" – a value line in a block layout. */
+function valueLine(l: string): { value: number; unit?: string; flag?: LabResult['flag'] } | undefined {
+  const [first, ...rest] = l.trim().split(/\s+/);
+  if (!first || !NUM.test(first)) return undefined;
+  let unit: string | undefined;
+  let flag: LabResult['flag'];
+  for (const t of rest) {
+    if (/^(high|low|abnormal|critical|h|l|a|hh|ll)$/i.test(t)) flag = /^(h|crit)/i.test(t) ? 'H' : /^l/i.test(t) ? 'L' : 'A';
+    else if (!unit && UNIT.test(t)) unit = t;
+    else return undefined;
+  }
+  return { value: num(first), unit, flag };
+}
+const RANGE_LINE = /^(?:normal|standard|reference|ref\.?)\s+(?:range|interval|value)s?\s*:?\s*(.+)$/i;
+const SKIP_LINE = /^(results?|value|your value|component|view trends|lab and collection|collected on|resulted|ordering provider|performing lab|specimen|comments?|narrative|status|final|show more|show less|flag|units?|reference)\b/i;
+
+/**
+ * Patient-portal layouts (e.g. MyChart) put each result on several lines:
+ *   Hemoglobin / Normal range: 12.0 - 15.5 g/dL / 12.4
+ */
+export function parseLabBlocks(text: string): { lab: NonNullable<ReturnType<typeof parseLabLine>>; source: string }[] {
+  const lines = text.split('\n').map((l) => l.trim());
+  const out: { lab: NonNullable<ReturnType<typeof parseLabLine>>; source: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const name = lines[i];
+    if (!name || /\d{2,}/.test(name.replace(/(b12|a1c|25|hla-?b27|t3|t4|c3|c4|ck-?mb|ca 125|ca-125|cd4|cd8)/gi, '')) || SKIP_LINE.test(name) || !plausibleTestName(name)) continue;
+    if (parseLabLine(name)) continue; // a one-line result, handled elsewhere
+    let range: { lo?: number; hi?: number; unit?: string } | undefined;
+    let value: number | undefined;
+    let textValue: string | undefined;
+    let unit: string | undefined;
+    let flag: LabResult['flag'];
+    let j = i + 1;
+    const end = Math.min(lines.length, i + 6);
+    for (; j < end; j++) {
+      const l = lines[j];
+      if (!l) continue;
+      const rm = l.match(RANGE_LINE);
+      if (rm) {
+        const t = rm[1].replace(/(\d)\s*(?:-|–|to)\s*(\d)/g, '$1-$2').replace(/([<>≤≥])\s+(\d)/g, '$1$2').split(/\s+/);
+        const r = parseRangeToken(t[0]);
+        if (r) range = { ...r, unit: t[1] && UNIT.test(t[1]) ? t[1] : undefined };
+        else if (QUAL.test(rm[1])) range = {};
+        continue;
+      }
+      if (SKIP_LINE.test(l)) continue;
+      const vm = valueLine(l);
+      if (vm && value === undefined && textValue === undefined) {
+        ({ value, unit = unit, flag = flag } = vm);
+        continue;
+      }
+      const qm = l.match(QUAL);
+      if (qm && qm.index === 0 && value === undefined && textValue === undefined) {
+        textValue = l.split(/\s{2,}/)[0];
+        continue;
+      }
+      if ((value !== undefined || textValue !== undefined) && /^(high|low|abnormal|critical|h|l|a)$/i.test(l)) {
+        flag = /^h|^crit/i.test(l) ? 'H' : /^l/i.test(l) ? 'L' : 'A';
+        continue;
+      }
+      break;
+    }
+    if (value === undefined && textValue === undefined) continue;
+    if (!range && value !== undefined && !unit) continue; // a bare number after a heading isn't enough
+    out.push({
+      lab: { test: name, value, textValue, unit: unit ?? range?.unit, refLow: range?.lo, refHigh: range?.hi, flag },
+      source: lines.slice(i, j).filter(Boolean).join(' | '),
+    });
+    i = j - 1;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- Boilerplate removal
+
+const BOILERPLATE = [
+  /^page \d+( of \d+)?$/i,
+  /\bpage \d+ of \d+\b/i,
+  /^printed (on|by|at)\b/i,
+  /mychart/i,
+  /licensed from epic/i,
+  /^©|\bcopyright\b|all rights reserved/i,
+  /^(mrn|nhs (no|number)|hospital number|acct|account|csn|fin)\s*[:#]/i,
+  /\bmrn\s*[:#]\s*\d+/i,
+  /^(dob|d\.o\.b\.?|date of birth)\s*[:\s]/i,
+  /^(patient|patient name|name)\s*:\s*/i,
+  /^this (document|report) (is|was) (confidential|intended)/i,
+  /^confidential/i,
+];
+
+/** Removes page footers, print stamps and identifier lines from text kept with a record. */
+export function stripBoilerplate(text: string): string {
+  const lines = text.split('\n');
+  const counts = new Map<string, number>();
+  for (const l of lines) {
+    const t = l.trim();
+    if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  return lines
+    .filter((l) => {
+      const t = l.trim();
+      if (!t) return true;
+      if (BOILERPLATE.some((re) => re.test(t))) return false;
+      if ((counts.get(t) ?? 0) >= 3 && t.length < 80) return false; // repeated running headers
+      return true;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }

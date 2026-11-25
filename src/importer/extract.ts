@@ -137,6 +137,23 @@ async function renderPage(page: PDFPageProxy): Promise<HTMLCanvasElement> {
 
 // ---------------------------------------------------------------- entry point
 
+/** Normalise typography from PDFs: ligatures (ﬁ), non-breaking spaces, odd dashes. */
+export function normalizeText(t: string): string {
+  return t.normalize('NFKC').replace(/[\u00a0\u2007\u202f]/g, ' ').replace(/[\u2010\u2011\u2012\u2212]/g, '-').replace(/\u00ad/g, '');
+}
+
+/**
+ * Does a page's text layer look like real words? Scanned PDFs often carry a poor
+ * hidden OCR layer from the scanner, which reads as gibberish.
+ */
+export function looksLikeGibberish(t: string): boolean {
+  const words = t.split(/\s+/).filter((w) => w.length >= 3);
+  if (words.length < 8) return false;
+  const good = words.filter((w) => /^[A-Za-z][a-z]+[.,:;)]?$|^[A-Z]{2,}[.,:;)]?$|^[<>]?\d+([.,/:-]\d+)*[.,%)]?$/.test(w) && (/[aeiouy]/i.test(w) || /\d/.test(w) || /^[A-Z]{2,5}$/.test(w)));
+  const weird = (t.match(/[^\x20-\x7E\n\t°µ±≤≥–—‘’“”•·…©®é]/g) ?? []).length / Math.max(1, t.length);
+  return good.length / words.length < 0.55 || weird > 0.08;
+}
+
 export async function sha256(buf: ArrayBuffer): Promise<string> {
   const h = await crypto.subtle.digest('SHA-256', buf);
   return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -152,10 +169,10 @@ export function fileKind(f: File): 'pdf' | 'image' | 'text' | 'unsupported' {
 
 export async function extractText(file: File, onProgress: (p: ExtractProgress) => void, opts: { forceOcr?: boolean } = {}): Promise<Extracted> {
   const kind = fileKind(file);
-  if (kind === 'text') return { text: await file.text(), pages: 1, ocrPages: 0 };
+  if (kind === 'text') return { text: normalizeText(await file.text()), pages: 1, ocrPages: 0 };
   if (kind === 'image') {
     const r = await ocrImage(file, onProgress);
-    return { text: r.text, pages: 1, ocrPages: 1, ocrConfidence: r.confidence };
+    return { text: normalizeText(r.text), pages: 1, ocrPages: 1, ocrConfidence: r.confidence };
   }
   if (kind !== 'pdf') throw new Error('This file type can’t be read. Use PDF, a photo (JPG/PNG) or a text file.');
   const lib = await pdfjs();
@@ -173,12 +190,13 @@ export async function extractText(file: File, onProgress: (p: ExtractProgress) =
     for (let i = 1; i <= doc.numPages; i++) {
       onProgress({ stage: 'reading', page: i, pages: doc.numPages });
       const page = await doc.getPage(i);
-      let t = opts.forceOcr ? '' : await pageText(page);
+      let t = opts.forceOcr ? '' : normalizeText(await pageText(page));
       // A page with (almost) no text layer is a scan or photo – read it with OCR.
-      if (t.replace(/\s/g, '').length < 40) {
+      // So is one whose hidden text layer is gibberish (poor scanner OCR).
+      if (t.replace(/\s/g, '').length < 40 || looksLikeGibberish(t)) {
         const canvas = await renderPage(page);
         const r = await ocrImage(canvas, onProgress, i, doc.numPages);
-        t = r.text;
+        t = normalizeText(r.text);
         conf.push(r.confidence);
         ocrPages++;
         canvas.width = canvas.height = 0;
