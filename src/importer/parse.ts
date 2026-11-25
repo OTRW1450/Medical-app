@@ -9,6 +9,7 @@ import {
   bodyRegions, bodySystems, dateOrderEvidence, detectProvider, detectSpecialty, findDates, listItems, medFromLine,
   parseLabBlocks, parseLabLine, sectionText, splitSections, stripBoilerplate, type DateOrder, type FoundDate, type Section,
 } from './text';
+import { PENDING_TAG } from './sessions';
 
 export type DocKind = 'lab' | 'imaging' | 'visit' | 'discharge' | 'other';
 export const DOC_KIND_LABEL: Record<DocKind, string> = {
@@ -216,7 +217,7 @@ export function parseDocument(rawText: string, o: ParseOptions): ParsedDoc {
   for (const { r, line } of found) {
     const lab: LabResult = { id: uid(), patientId: pid, date: kind === 'lab' ? labDate : date, createdAt: Date.now(), ...r };
     const dup = o.data.labs.some((x) => normalizeTest(x.test) === normalizeTest(lab.test) && x.date === lab.date && (x.value === lab.value || x.textValue === lab.textValue));
-    labs.push({ kind: 'lab', id: lab.id, include: !dup, duplicate: dup, lab, source: line.trim(), note: dup ? 'Already in the record' : undefined });
+    labs.push({ kind: 'lab', id: lab.id, include: !dup, duplicate: dup, lab, source: line.trim(), note: dup ? 'Already in the record or in an earlier session' : undefined });
   }
 
   // ---------------- main record
@@ -279,7 +280,11 @@ export function parseDocument(rawText: string, o: ParseOptions): ParsedDoc {
       ? `Hospital stay${firstReason ? ` – ${firstReason.slice(0, 60)}` : ''}`
       : kind === 'other'
         ? (o.fileName?.replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ') ?? text.split('\n').find((l) => l.trim())?.trim().slice(0, 70) ?? 'Document')
-        : `${specialty ?? 'Clinic'} ${/consult|new patient|thank you for referring/i.test(text) ? 'consultation' : /telehealth|telephone|video/i.test(text) ? 'telehealth visit' : 'visit'}${firstReason ? ` – ${firstReason.slice(0, 50)}` : ''}`;
+        : `${specialty ?? 'Clinic'} ${
+            /\b(session|treatment note|daily note|soap note|therapy note)\b/i.test(text) || /^(Physiotherapy|Occupational therapy|Psychiatry\/Psychology|Chiropractic|Acupuncture|Massage therapy|Speech therapy)$/.test(specialty ?? '')
+              ? 'session'
+              : /consult|new patient|thank you for referring/i.test(text) ? 'consultation' : /telehealth|telephone|video/i.test(text) ? 'telehealth visit' : 'visit'
+          }${firstReason ? ` – ${firstReason.slice(0, 50)}` : ''}`;
     main = {
       kind: 'event', id: uid(), include: true,
       event: event({
@@ -316,7 +321,7 @@ export function parseDocument(rawText: string, o: ParseOptions): ParsedDoc {
           kind: 'event', id: uid(),
           include: !dup && (primary || !existing),
           source: item,
-          note: dup ? `Already in the record (${existing!.title}, ${existing!.date})` : upgrade ? `Was suspected on ${existing!.date} – now stated as a diagnosis` : !primary ? 'From the past history / problem list' : undefined,
+          note: dup ? (existing!.tags.includes(PENDING_TAG) ? `Also in an earlier session of this file (${existing!.date})` : `Already in the record (${existing!.title}, ${existing!.date})`) : upgrade ? `Was suspected on ${existing!.date} – now stated as a diagnosis` : !primary ? 'From the past history / problem list' : undefined,
           event: event({
             patientId: pid, type: 'diagnosis', date: main.event.date, title, status,
             specialty, provider, systems: bodySystems(title), bodyRegions: bodyRegions(title),

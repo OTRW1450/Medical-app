@@ -5,11 +5,13 @@ import { extractText, fileKind, sha256, stopOcr, type Extracted, type ExtractPro
 import { DOC_KIND_LABEL, parseDocument, type DocKind, type ParsedDoc } from '../importer/parse';
 import type { DateOrder } from '../importer/text';
 import { saveImport, type SaveResult } from '../importer/save';
+import { splitSessions } from '../importer/split';
+import { withProposals } from '../importer/sessions';
 import { fmtDate, today } from '../lib/dates';
 import { href } from '../lib/router';
 import { uid } from '../lib/id';
 import { BODY_REGIONS } from '../lib/taxonomy';
-import { EVENT_TYPE_LABEL, type DiagnosisStatus, type EventType } from '../types';
+import { EVENT_TYPE_LABEL, type DiagnosisStatus, type EventType, type PatientData } from '../types';
 import { labStatus } from '../analysis/corpus';
 import { Field, Modal, TagInput, useLocalState } from '../components/ui';
 import { StatusBadge } from './LabsView';
@@ -28,6 +30,9 @@ interface Item {
   result?: SaveResult;
   kind?: DocKind; // user override
   order?: DateOrder; // user override
+  /** set when one file was split into several sessions */
+  segment?: { group: string; index: number; total: number; fullText: string };
+  noSplit?: boolean;
 }
 
 const localeOrder = (): DateOrder => (/^en-(US|PH|CA)|^es-US/i.test(navigator.language) ? 'mdy' : 'dmy');
@@ -77,12 +82,9 @@ export function ImportView() {
         const sha = await sha256(buf);
         const known = await attStore.metaByPatient(dataRef.current.patient.id);
         const extracted = await extractText(next.file, (progress) => patch(next.id, { progress }));
-        const parsed = parse(next, extracted.text);
-        if (extracted.ocrPages && (extracted.ocrConfidence ?? 100) < 70)
-          parsed.warnings.unshift(`This looks like a scan or photo and the text was hard to read (confidence ${Math.round(extracted.ocrConfidence ?? 0)}%). Please check everything carefully.`);
-        if (!extracted.text.trim()) parsed.warnings.unshift('No text could be read from this file.');
-        patch(next.id, { status: 'ready', extracted, parsed, sha, duplicateFile: known.some((k) => k.sha256 === sha) });
-        setSelected((s) => s ?? next.id);
+        const ready = ingest({ ...next, sha, duplicateFile: known.some((k) => k.sha256 === sha) }, extracted);
+        setItems((xs) => xs.flatMap((x) => (x.id === next.id ? ready : [x])));
+        setSelected((s) => s ?? ready[0].id);
       } catch (e) {
         patch(next.id, { status: 'error', error: (e as Error).message });
       } finally {
@@ -91,6 +93,61 @@ export function ImportView() {
       }
     })();
   }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Parse a read file; if it holds several dated sessions, return one item per session. */
+  function ingest(it: Item, extracted: Extracted): Item[] {
+    const warn = (p: ParsedDoc) => {
+      if (extracted.ocrPages && (extracted.ocrConfidence ?? 100) < 70)
+        p.warnings.unshift(`This looks like a scan or photo and the text was hard to read (confidence ${Math.round(extracted.ocrConfidence ?? 0)}%). Please check everything carefully.`);
+      if (!extracted.text.trim()) p.warnings.unshift('No text could be read from this file.');
+      return p;
+    };
+    const whole = parse(it, extracted.text);
+    const segs = it.noSplit ? [] : splitSessions(extracted.text, it.order ?? whole.dateOrder, { labDoc: whole.kind === 'lab' });
+    if (segs.length < 2) return [{ ...it, status: 'ready', extracted, parsed: warn(whole), segment: undefined }];
+    let virtual: PatientData = dataRef.current;
+    return segs.map((seg, index) => {
+      const opts = { data: virtual, fileName: it.file.name, forceKind: it.kind, dateOrder: it.order ?? whole.dateOrder, defaultOrder, today: today() };
+      let parsed = parseDocument(seg.text, opts);
+      // A dated entry in a multi-session file is a session even without headings.
+      if (parsed.kind === 'other' && !it.kind) parsed = parseDocument(seg.text, { ...opts, forceKind: 'visit' });
+      warn(parsed);
+      // Later sessions often omit the letterhead – inherit specialty / clinician from the file.
+      parsed.main.event.specialty ??= whole.main.event.specialty;
+      parsed.main.event.provider ??= whole.main.event.provider;
+      if (/^Clinic (session|visit)/.test(parsed.main.event.title) && parsed.main.event.specialty)
+        parsed.main.event.title = parsed.main.event.title.replace(/^Clinic/, parsed.main.event.specialty);
+      parsed.main.event.notes = [parsed.main.event.notes, `From “${it.file.name}”, session ${index + 1} of ${segs.length}.`].filter(Boolean).join('\n');
+      virtual = withProposals(virtual, parsed);
+      return { ...it, id: index === 0 ? it.id : uid(), status: 'ready' as Status, extracted: { ...extracted, text: seg.text }, parsed, segment: { group: it.id, index, total: segs.length, fullText: extracted.text } };
+    });
+  }
+
+  /** Replace every item of a split group with a fresh read of the whole file. */
+  function regroup(it: Item, extracted: Extracted, over: Partial<Item> = {}) {
+    const group = it.segment?.group ?? it.id;
+    const base: Item = { ...it, ...over, id: group, segment: undefined, result: undefined };
+    const fresh = ingest(base, extracted);
+    setItems((xs) => {
+      const first = xs.findIndex((x) => (x.segment?.group ?? x.id) === group);
+      const rest = xs.filter((x) => (x.segment?.group ?? x.id) !== group);
+      rest.splice(first, 0, ...fresh);
+      return rest;
+    });
+    setSelected(fresh[0].id);
+  }
+
+  const attachedGroups = useRef(new Set<string>());
+  async function saveOne(it: Item) {
+    patch(it.id, { status: 'saving' });
+    const group = it.segment?.group ?? it.id;
+    // Attach the original file once per file, to the first session saved.
+    const attach = !attachedGroups.current.has(group);
+    attachedGroups.current.add(group);
+    const result = await saveImport(it.parsed!, dataRef.current, attach ? { file: it.file, sha256: it.sha } : undefined);
+    patch(it.id, { status: 'saved', result });
+    return result;
+  }
 
   const addFiles = (files: FileList | File[]) => {
     const list = [...files].map((file): Item => ({
@@ -145,7 +202,11 @@ export function ImportView() {
             <div className="faint" style={{ fontSize: 12, padding: '2px 6px 6px' }}>{items.length} file{items.length > 1 ? 's' : ''}{pending ? ` · ${pending} being read` : ''}</div>
             {items.map((it) => (
               <button key={it.id} className={`queue-item${it.id === selected ? ' on' : ''}`} onClick={() => setSelected(it.id)} disabled={it.status === 'waiting'}>
-                <span className="qi-name">{it.file.name}</span>
+                <span className="qi-name">
+                  {it.segment ? <span className="faint">↳ </span> : null}
+                  {it.file.name}
+                  {it.segment && <span className="faint" style={{ fontWeight: 400 }}> · session {it.segment.index + 1} of {it.segment.total}{it.parsed?.date ? ` · ${fmtDate(it.parsed.date)}` : ''}</span>}
+                </span>
                 <span className="qi-status">
                   {it.status === 'reading' ? progressText(it.progress) : it.status === 'ready' ? `▶ Ready to check · ${it.parsed ? DOC_KIND_LABEL[it.parsed.kind] : ''}` : it.status === 'saved' ? '✓ Saved' : it.status === 'skipped' ? 'Skipped' : it.status === 'error' ? `⚠ ${it.error}` : it.status === 'saving' ? 'Saving…' : 'Waiting…'}
                 </span>
@@ -158,22 +219,28 @@ export function ImportView() {
                 key={current.id + (current.kind ?? '') + (current.order ?? '')}
                 item={current}
                 onChange={(parsed) => patch(current.id, { parsed })}
-                onReparse={(over) => patch(current.id, { ...over, parsed: parse(current, current.extracted!.text, over) })}
+                onReparse={(over) =>
+                  over.order && current.segment
+                    ? regroup(current, { ...current.extracted!, text: current.segment.fullText }, over) // re-split with the new date order
+                    : patch(current.id, { ...over, parsed: parse(current, current.extracted!.text, over) })
+                }
                 onOcr={async () => {
                   patch(current.id, { status: 'reading', progress: undefined });
                   try {
                     const extracted = await extractText(current.file, (progress) => patch(current.id, { progress }), { forceOcr: true });
-                    patch(current.id, { status: 'ready', extracted, parsed: parse(current, extracted.text) });
+                    regroup(current, extracted);
                   } catch (e) {
                     patch(current.id, { status: 'error', error: (e as Error).message });
                   }
                 }}
-                onSkip={() => { patch(current.id, { status: 'skipped' }); goNext(current.id); }}
-                onSave={async () => {
-                  patch(current.id, { status: 'saving' });
-                  const result = await saveImport(current.parsed!, dataRef.current, { file: current.file, sha256: current.sha });
-                  patch(current.id, { status: 'saved', result });
+                group={current.segment ? items.filter((x) => x.segment?.group === current.segment!.group) : undefined}
+                onKeepWhole={() => regroup(current, { ...current.extracted!, text: current.segment!.fullText }, { noSplit: true })}
+                onSaveAll={async () => {
+                  const g = items.filter((x) => x.segment?.group === current.segment!.group && x.status === 'ready');
+                  for (const x of g) await saveOne(x);
                 }}
+                onSkip={() => { patch(current.id, { status: 'skipped' }); goNext(current.id); }}
+                onSave={() => saveOne(current)}
               />
             ) : current?.status === 'saved' && current.result ? (
               <div className="card">
@@ -220,8 +287,11 @@ export function ImportView() {
 const STATUSES: DiagnosisStatus[] = ['active', 'suspected', 'resolved', 'ruled-out'];
 const ACTION_LABEL = { start: 'Start', stop: 'Stop', change: 'Dose change', list: 'On medication list' } as const;
 
-function Review({ item, onChange, onReparse, onOcr, onSkip, onSave }: {
+function Review({ item, onChange, onReparse, onOcr, onSkip, onSave, group, onKeepWhole, onSaveAll }: {
   item: Item;
+  group?: Item[];
+  onKeepWhole: () => void;
+  onSaveAll: () => Promise<void>;
   onChange: (p: ParsedDoc) => void;
   onReparse: (over: Partial<Pick<Item, 'kind' | 'order'>>) => void;
   onOcr: () => void;
@@ -230,6 +300,7 @@ function Review({ item, onChange, onReparse, onOcr, onSkip, onSave }: {
 }) {
   const p = item.parsed!;
   const [showOriginal, setShowOriginal] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const url = useMemo(() => URL.createObjectURL(item.file), [item.file]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   const ev = p.main.event;
@@ -264,6 +335,24 @@ function Review({ item, onChange, onReparse, onOcr, onSkip, onSave }: {
           <button onClick={() => setShowOriginal(true)}>View original</button>
         </div>
         {item.duplicateFile && <div className="banner warn" style={{ marginTop: 10 }}>This exact file has been imported before.</div>}
+        {group && item.segment && (
+          <div className="banner" style={{ marginTop: 10 }}>
+            <div>
+              This file holds <b>{item.segment.total} separate sessions</b>, so it has been split by date ({group.map((g) => (g.parsed?.date ? fmtDate(g.parsed.date) : '?')).join(', ')}). This is session {item.segment.index + 1}.
+              Diagnoses and medications repeated in later sessions are only proposed once.
+            </div>
+            <div className="row" style={{ marginTop: 8 }}>
+              {group.some((g) => g.status === 'ready') && (
+                <button className="primary small" disabled={savingAll} onClick={async () => { setSavingAll(true); await onSaveAll(); setSavingAll(false); }}>
+                  {savingAll ? 'Saving…' : `Save all ${group.filter((g) => g.status === 'ready').length} remaining sessions as they are`}
+                </button>
+              )}
+              {!group.some((g) => g.status === 'saved' || g.status === 'saving') && (
+                <button className="small" onClick={onKeepWhole}>It’s one document – don’t split it</button>
+              )}
+            </div>
+          </div>
+        )}
         {p.warnings.map((w) => <div key={w} className="banner warn" style={{ marginTop: 10 }}>▲ {w}</div>)}
         <div className="form-grid" style={{ marginTop: 12 }}>
           <Field label="What kind of document is this?">

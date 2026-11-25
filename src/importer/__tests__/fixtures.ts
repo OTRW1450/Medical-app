@@ -254,3 +254,63 @@ Take 10 mg by mouth 2 (two) times daily.
 
 MyChart® licensed from Epic Systems Corporation © 1999 - 2024
 Printed on 11/24/2026 10:02 AM    Page 1 of 2`;
+
+// ---- Several sessions in one PDF (fictional) ----
+
+export const PHYSIO_SESSIONS = `Riverside Physiotherapy Clinic     Patient: Alex Demo     DOB: 12/04/1990
+Treatment Note
+Date of service: 07/01/2025
+Clinician: Sam Rivera, DPT
+Subjective: Low back pain 7/10, worse in the morning, stiffness for over an hour. Pain radiating to left leg.
+Objective: Lumbar flexion limited 50%. Positive SLR left at 45 degrees.
+Assessment:
+1. Lumbar radiculopathy, left
+2. Hypermobility – Beighton 6/9
+Plan: McKenzie extensions, core stability programme. Review in 1 week.
+
+Riverside Physiotherapy Clinic     Patient: Alex Demo     DOB: 12/04/1990
+Treatment Note
+Date of service: 14/01/2025
+Clinician: Sam Rivera, DPT
+Subjective: Pain 6/10. Morning stiffness unchanged. Flare after prolonged sitting at work.
+Objective: Flexion limited 40%.
+Assessment:
+1. Lumbar radiculopathy, left
+Plan: Continue programme. Add hip mobility.
+Page 1 of 2
+Riverside Physiotherapy Clinic     Patient: Alex Demo     DOB: 12/04/1990
+Treatment Note
+Date of service: 14/01/2025
+(continued) Advised ergonomic assessment at work.
+
+Riverside Physiotherapy Clinic     Patient: Alex Demo     DOB: 12/04/1990
+Treatment Note
+Date of service: 21/01/2025
+Clinician: Sam Rivera, DPT
+Subjective: Pain 5/10. GP started pregabalin 75 mg twice daily for nerve pain. Night pain still waking her at 3am.
+Objective: SLR left now 60 degrees.
+Assessment:
+1. Lumbar radiculopathy, left – improving
+2. Possible inflammatory back pain given morning stiffness and night pain
+Plan: Suggest GP consider rheumatology referral. Continue programme.
+
+Riverside Physiotherapy Clinic     Patient: Alex Demo     DOB: 12/04/1990
+Treatment Note
+Date of service: 04/02/2025
+Clinician: Sam Rivera, DPT
+Subjective: Pain 4/10. Stopped pregabalin due to drowsiness.
+Assessment:
+1. Lumbar radiculopathy – resolved
+Plan: Discharged from physiotherapy with home exercise programme.
+Page 2 of 2`;
+
+export const COUNSELLING_LOG = `Pain psychology – session record
+
+14/01/2025 – Session 4
+Discussed pacing and flare plan. Sleep poor, 5 hours.
+
+21/01/2025 – Session 5
+Practised relaxation. Mood improved. Reports panic attacks less frequent.
+
+28/01/2025 – Session 6
+Reviewed pacing diary. Plan: continue fortnightly.`;
